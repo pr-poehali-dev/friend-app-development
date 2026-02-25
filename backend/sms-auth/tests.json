@@ -1,0 +1,27 @@
+{
+  "tests": [
+    {
+      "name": "Check session without token returns 401",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 401,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Send without phone returns 400",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "send", "phone": ""},
+      "expectedStatus": 400,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Verify wrong code returns 401",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "verify", "phone": "+79001234567", "code": "000000"},
+      "expectedStatus": 401,
+      "bodyMatcher": "partial"
+    }
+  ]
+}
