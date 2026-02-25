@@ -1,0 +1,27 @@
+{
+  "tests": [
+    {
+      "name": "Login with valid credentials returns 200",
+      "method": "POST",
+      "path": "/",
+      "body": {"username": "ivanv", "password": "demo123"},
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Login with wrong password returns 401",
+      "method": "POST",
+      "path": "/",
+      "body": {"username": "ivanv", "password": "wrong"},
+      "expectedStatus": 401,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Check session without token returns 401",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 401,
+      "bodyMatcher": "partial"
+    }
+  ]
+}
