@@ -6,6 +6,7 @@ const API = {
   chats: "https://functions.poehali.dev/871abe69-bab0-4421-9d49-eac8a87cbbab",
   messages: "https://functions.poehali.dev/3a4d8e8d-6ec2-41f4-8084-57c7800b94a3",
   profile: "https://functions.poehali.dev/eb1e5ec8-553a-4b79-a005-3fa365d9667b",
+  avatar: "https://functions.poehali.dev/164ba4b4-9b9c-4668-8ca1-0bf6fbcbf6ab",
 };
 
 type Section = "chats" | "contacts" | "calls" | "video" | "files" | "bots" | "settings" | "analytics";
@@ -18,6 +19,7 @@ interface User {
   department?: string;
   phone?: string;
   avatar_initials: string;
+  avatar_url?: string;
   online: boolean;
 }
 
@@ -470,11 +472,52 @@ function SettingsPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
 
   const isDirty =
     displayName !== currentUser.display_name ||
     position !== (currentUser.position || "") ||
     department !== (currentUser.department || "");
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setAvatarError("Только изображения (jpg, png, webp)");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarError("Файл не должен превышать 5 МБ");
+      return;
+    }
+    setAvatarUploading(true);
+    setAvatarError("");
+    try {
+      const reader = new FileReader();
+      const b64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve((reader.result as string).split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch(API.avatar, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Session-Id": sessionToken },
+        body: JSON.stringify({ image: b64, content_type: file.type }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAvatarError(data.message || "Не удалось загрузить фото");
+        return;
+      }
+      onUserUpdate(data.user);
+    } catch {
+      setAvatarError("Ошибка соединения");
+    } finally {
+      setAvatarUploading(false);
+      e.target.value = "";
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -534,15 +577,35 @@ function SettingsPanel({
 
         {/* Avatar preview */}
         <div className="flex items-center gap-4 mb-7 p-4 bg-[#0a1120] border border-[#1a2332] rounded-sm max-w-lg">
-          <div className="w-14 h-14 rounded-sm bg-[#1a2332] border border-[#2a3548] flex items-center justify-center text-[#4a9eff] text-lg font-medium">
-            {displayName.trim().split(" ").length >= 2
-              ? (displayName.trim().split(" ")[0][0] + displayName.trim().split(" ")[1][0]).toUpperCase()
-              : currentUser.avatar_initials}
-          </div>
+          <label className="relative w-14 h-14 cursor-pointer group flex-shrink-0">
+            <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} disabled={avatarUploading} />
+            {currentUser.avatar_url ? (
+              <img src={currentUser.avatar_url} alt="avatar" className="w-14 h-14 rounded-sm object-cover border border-[#2a3548]" />
+            ) : (
+              <div className="w-14 h-14 rounded-sm bg-[#1a2332] border border-[#2a3548] flex items-center justify-center text-[#4a9eff] text-lg font-medium">
+                {displayName.trim().split(" ").length >= 2
+                  ? (displayName.trim().split(" ")[0][0] + displayName.trim().split(" ")[1][0]).toUpperCase()
+                  : currentUser.avatar_initials}
+              </div>
+            )}
+            <div className="absolute inset-0 rounded-sm bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              {avatarUploading
+                ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                : <Icon name="Camera" size={16} className="text-white" />}
+            </div>
+          </label>
           <div>
             <div className="text-sm font-medium text-[#e2e8f0]">{displayName || currentUser.display_name}</div>
             {position && <div className="text-xs text-[#4a9eff] mt-0.5">{position}</div>}
             {department && <div className="text-[11px] text-[#4a5568] mt-0.5">{department}</div>}
+            <button
+              type="button"
+              onClick={() => (document.querySelector('input[type="file"]') as HTMLInputElement)?.click()}
+              className="text-[10px] text-[#4a9eff] hover:text-[#3b8fe0] mt-1 transition-colors"
+            >
+              {currentUser.avatar_url ? "Сменить фото" : "Загрузить фото"}
+            </button>
+            {avatarError && <div className="text-[10px] text-[#f87171] mt-1">{avatarError}</div>}
           </div>
         </div>
 

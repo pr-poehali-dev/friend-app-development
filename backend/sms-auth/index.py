@@ -37,7 +37,7 @@ def send_sms(phone: str, code: str) -> bool:
     login = os.environ.get("SMSC_LOGIN", "")
     password = os.environ.get("SMSC_PASSWORD", "")
     if not login or not password:
-        print(f"[DEV] SMS to {phone}: code={code}")
+        print(f"[DEV] SMS to {phone}: code={code} (SMSC credentials not set)")
         return True
     message = f"Ваш код Друг: {code}"
     params = urllib.parse.urlencode({
@@ -51,10 +51,15 @@ def send_sms(phone: str, code: str) -> bool:
     url = f"https://smsc.ru/sys/send.php?{params}"
     try:
         with urllib.request.urlopen(url, timeout=10) as r:
-            resp = json.loads(r.read().decode())
-            return "error" not in resp
+            raw = r.read().decode()
+            resp = json.loads(raw)
+            print(f"[SMS] phone={phone} smsc_response={resp}")
+            if "error" in resp:
+                print(f"[SMS ERROR] code={resp.get('error_code')} msg={resp.get('error')}")
+                return False
+            return True
     except Exception as e:
-        print(f"SMS error: {e}")
+        print(f"[SMS EXCEPTION] {e}")
         return False
 
 

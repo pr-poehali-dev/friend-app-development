@@ -1,0 +1,25 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS returns 200",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "No session returns 401",
+      "method": "POST",
+      "path": "/",
+      "body": {"image": "aGVsbG8=", "content_type": "image/jpeg"},
+      "expectedStatus": 401
+    },
+    {
+      "name": "No image returns 400",
+      "method": "POST",
+      "path": "/",
+      "headers": {"X-Session-Id": "fake_token"},
+      "body": {},
+      "expectedStatus": 400
+    }
+  ]
+}
