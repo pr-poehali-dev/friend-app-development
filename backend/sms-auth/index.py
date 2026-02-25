@@ -45,6 +45,7 @@ def send_sms(phone: str, code: str) -> bool:
         "psw": password,
         "phones": phone,
         "mes": message,
+        "sender": "ddmaxisrs",
         "fmt": 3,
         "charset": "utf-8",
     })
