@@ -5,6 +5,7 @@ const API = {
   auth: "https://functions.poehali.dev/564d45d3-b0f8-406f-8586-18104dbab924",
   chats: "https://functions.poehali.dev/871abe69-bab0-4421-9d49-eac8a87cbbab",
   messages: "https://functions.poehali.dev/3a4d8e8d-6ec2-41f4-8084-57c7800b94a3",
+  profile: "https://functions.poehali.dev/eb1e5ec8-553a-4b79-a005-3fa365d9667b",
 };
 
 type Section = "chats" | "contacts" | "calls" | "video" | "files" | "bots" | "settings" | "analytics";
@@ -447,6 +448,185 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
           to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
+    </div>
+  );
+}
+
+// ============ SETTINGS PANEL ============
+function SettingsPanel({
+  currentUser,
+  sessionToken,
+  onUserUpdate,
+  onLogout,
+}: {
+  currentUser: User;
+  sessionToken: string;
+  onUserUpdate: (u: User) => void;
+  onLogout: () => void;
+}) {
+  const [displayName, setDisplayName] = useState(currentUser.display_name);
+  const [position, setPosition] = useState(currentUser.position || "");
+  const [department, setDepartment] = useState(currentUser.department || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+
+  const isDirty =
+    displayName !== currentUser.display_name ||
+    position !== (currentUser.position || "") ||
+    department !== (currentUser.department || "");
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!displayName.trim() || displayName.trim().split(" ").length < 2) {
+      setError("Введите имя и фамилию");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    setSuccess(false);
+    try {
+      const res = await fetch(API.profile, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-Session-Id": sessionToken },
+        body: JSON.stringify({ display_name: displayName.trim(), position: position.trim(), department: department.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.message || "Не удалось сохранить");
+        return;
+      }
+      onUserUpdate(data.user);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch {
+      setError("Ошибка соединения");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-1 overflow-hidden">
+      {/* Left nav */}
+      <div className="w-52 flex flex-col border-r border-[#1a2332] bg-[#0a1120] flex-shrink-0 pt-4">
+        <h2 className="px-4 text-[10px] font-semibold text-[#4a5568] tracking-widest uppercase mb-3">Настройки</h2>
+        {[
+          { icon: "User", label: "Профиль", active: true },
+          { icon: "Bell", label: "Уведомления", active: false },
+          { icon: "Shield", label: "Безопасность", active: false },
+          { icon: "Link", label: "Интеграции", active: false },
+        ].map(item => (
+          <button key={item.label} className={`flex items-center gap-3 px-4 py-2.5 text-xs transition-colors ${item.active ? "bg-[#111827] text-[#4a9eff]" : "text-[#4a5568] hover:text-[#94a3b8] hover:bg-[#0e1627]"}`}>
+            <Icon name={item.icon} size={14} />{item.label}
+          </button>
+        ))}
+        <div className="mt-auto mb-4 px-4">
+          <button onClick={onLogout} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#f87171] hover:bg-[#1a1020] rounded-sm transition-colors border border-transparent hover:border-[#3a1520]">
+            <Icon name="LogOut" size={13} /> Выйти
+          </button>
+        </div>
+      </div>
+
+      {/* Profile form */}
+      <div className="flex-1 overflow-y-auto px-8 py-6">
+        <h3 className="text-sm font-semibold text-[#e2e8f0] mb-6">Профиль</h3>
+
+        {/* Avatar preview */}
+        <div className="flex items-center gap-4 mb-7 p-4 bg-[#0a1120] border border-[#1a2332] rounded-sm max-w-lg">
+          <div className="w-14 h-14 rounded-sm bg-[#1a2332] border border-[#2a3548] flex items-center justify-center text-[#4a9eff] text-lg font-medium">
+            {displayName.trim().split(" ").length >= 2
+              ? (displayName.trim().split(" ")[0][0] + displayName.trim().split(" ")[1][0]).toUpperCase()
+              : currentUser.avatar_initials}
+          </div>
+          <div>
+            <div className="text-sm font-medium text-[#e2e8f0]">{displayName || currentUser.display_name}</div>
+            {position && <div className="text-xs text-[#4a9eff] mt-0.5">{position}</div>}
+            {department && <div className="text-[11px] text-[#4a5568] mt-0.5">{department}</div>}
+          </div>
+        </div>
+
+        <form onSubmit={handleSave} className="space-y-4 max-w-lg">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="block text-[10px] font-semibold text-[#4a5568] uppercase tracking-widest mb-1.5">Имя и Фамилия</label>
+              <input
+                value={displayName}
+                onChange={e => { setDisplayName(e.target.value); setError(""); setSuccess(false); }}
+                placeholder="Иван Петров"
+                className="w-full bg-[#111827] border border-[#1a2332] rounded-sm px-3 py-2 text-xs text-[#e2e8f0] placeholder-[#2a3548] focus:outline-none focus:border-[#4a9eff] transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-[#4a5568] uppercase tracking-widest mb-1.5">Должность</label>
+              <input
+                value={position}
+                onChange={e => { setPosition(e.target.value); setSuccess(false); }}
+                placeholder="Менеджер"
+                className="w-full bg-[#111827] border border-[#1a2332] rounded-sm px-3 py-2 text-xs text-[#e2e8f0] placeholder-[#2a3548] focus:outline-none focus:border-[#4a9eff] transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-[#4a5568] uppercase tracking-widest mb-1.5">Отдел</label>
+              <input
+                value={department}
+                onChange={e => { setDepartment(e.target.value); setSuccess(false); }}
+                placeholder="Продажи"
+                className="w-full bg-[#111827] border border-[#1a2332] rounded-sm px-3 py-2 text-xs text-[#e2e8f0] placeholder-[#2a3548] focus:outline-none focus:border-[#4a9eff] transition-colors"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-[10px] font-semibold text-[#4a5568] uppercase tracking-widest mb-1.5">Телефон</label>
+              <input
+                value={currentUser.phone || ""}
+                readOnly
+                className="w-full bg-[#0a1120] border border-[#1a2332] rounded-sm px-3 py-2 text-xs text-[#4a5568] font-mono cursor-not-allowed"
+              />
+              <p className="mt-1 text-[10px] text-[#2a3548]">Номер телефона изменить нельзя</p>
+            </div>
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-2 text-[11px] text-[#f87171] bg-[#140a0a] border border-[#2a1010] rounded-sm px-3 py-2.5">
+              <Icon name="AlertCircle" size={12} /> {error}
+            </div>
+          )}
+          {success && (
+            <div className="flex items-center gap-2 text-[11px] text-[#4ade80] bg-[#0a1a10] border border-[#1a3020] rounded-sm px-3 py-2.5">
+              <Icon name="CheckCircle" size={12} /> Профиль сохранён
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              type="submit"
+              disabled={saving || !isDirty}
+              className="px-5 py-2 bg-[#4a9eff] text-[#080f1a] text-xs font-semibold rounded-sm hover:bg-[#3b8fe0] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              {saving ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-3 h-3 border-2 border-[#080f1a]/30 border-t-[#080f1a] rounded-full animate-spin inline-block" />
+                  Сохраняем...
+                </span>
+              ) : "Сохранить"}
+            </button>
+            {isDirty && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDisplayName(currentUser.display_name);
+                  setPosition(currentUser.position || "");
+                  setDepartment(currentUser.department || "");
+                  setError("");
+                }}
+                className="px-4 py-2 text-xs text-[#4a5568] hover:text-[#94a3b8] transition-colors"
+              >
+                Отмена
+              </button>
+            )}
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -994,45 +1174,12 @@ export default function App() {
 
         {/* SETTINGS */}
         {section === "settings" && (
-          <div className="flex flex-1 overflow-hidden">
-            <div className="w-52 flex flex-col border-r border-[#1a2332] bg-[#0a1120] flex-shrink-0 pt-4">
-              <h2 className="px-4 text-[10px] font-semibold text-[#4a5568] tracking-widest uppercase mb-3">Настройки</h2>
-              {[{ icon: "User", label: "Профиль" }, { icon: "Bell", label: "Уведомления" }, { icon: "Shield", label: "Безопасность" }, { icon: "Link", label: "Интеграции" }].map((item, i) => (
-                <button key={i} className={`flex items-center gap-3 px-4 py-2.5 text-xs transition-colors ${i === 0 ? "bg-[#111827] text-[#4a9eff]" : "text-[#4a5568] hover:text-[#94a3b8] hover:bg-[#0e1627]"}`}>
-                  <Icon name={item.icon} size={14} />{item.label}
-                </button>
-              ))}
-              <div className="mt-auto mb-4 px-4">
-                <button onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#f87171] hover:bg-[#1a1020] rounded-sm transition-colors border border-transparent hover:border-[#3a1520]">
-                  <Icon name="LogOut" size={13} /> Выйти
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto px-8 py-6">
-              <h3 className="text-sm font-semibold text-[#e2e8f0] mb-6">Профиль</h3>
-              <div className="flex items-center gap-4 mb-7 p-4 bg-[#0a1120] border border-[#1a2332] rounded-sm max-w-lg">
-                <div className="w-14 h-14 rounded-sm bg-[#1a2332] border border-[#2a3548] flex items-center justify-center text-[#4a9eff] text-lg font-medium">{currentUser.avatar_initials}</div>
-                <div>
-                  <div className="text-sm font-medium text-[#e2e8f0]">{currentUser.display_name}</div>
-                  <div className="text-xs text-[#4a9eff] mb-1">{currentUser.position}</div>
-                  <div className="text-[11px] text-[#4a5568]">{currentUser.department}</div>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4 max-w-lg">
-                {[
-                  { label: "Имя", value: currentUser.display_name },
-                  { label: "Должность", value: currentUser.position || "" },
-                  { label: "Телефон", value: currentUser.phone || "" },
-                  { label: "Отдел", value: currentUser.department || "" },
-                ].map(field => (
-                  <div key={field.label}>
-                    <label className="block text-[10px] font-semibold text-[#4a5568] uppercase tracking-widest mb-1.5">{field.label}</label>
-                    <input defaultValue={field.value} className="w-full bg-[#111827] border border-[#1a2332] rounded-sm px-3 py-2 text-xs text-[#e2e8f0] focus:outline-none focus:border-[#4a9eff] transition-colors" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <SettingsPanel
+            currentUser={currentUser}
+            sessionToken={sessionToken!}
+            onUserUpdate={setCurrentUser}
+            onLogout={handleLogout}
+          />
         )}
 
         {/* ANALYTICS */}
