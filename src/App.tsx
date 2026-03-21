@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 
 const API = {
-  auth: "https://functions.poehali.dev/564d45d3-b0f8-406f-8586-18104dbab924",
+  auth: "https://functions.poehali.dev/959bee44-9a42-4a9f-b352-21605b616456",
   chats: "https://functions.poehali.dev/871abe69-bab0-4421-9d49-eac8a87cbbab",
   messages: "https://functions.poehali.dev/3a4d8e8d-6ec2-41f4-8084-57c7800b94a3",
   profile: "https://functions.poehali.dev/eb1e5ec8-553a-4b79-a005-3fa365d9667b",
@@ -17,7 +17,8 @@ interface User {
   display_name: string;
   position?: string;
   department?: string;
-  phone?: string;
+  organization?: string;
+  email?: string;
   avatar_initials: string;
   avatar_url?: string;
   online: boolean;
@@ -112,139 +113,179 @@ function FileIconComp({ type }: { type: "doc" | "img" | "archive" | "audio" | "v
   return <Icon name={icon} size={20} className={color} />;
 }
 
-// ============ SMS AUTH SCREEN ============
-type AuthStep = "phone" | "code" | "register";
+// ============ EMAIL AUTH SCREEN ============
+type AuthStep = "login" | "forgot" | "email_code" | "register" | "reset_password";
+
+const inputCls = "w-full bg-[#0d1421] border border-[#1a2332] rounded-sm px-4 py-3 text-sm text-[#e2e8f0] placeholder-[#2a3548] focus:outline-none focus:border-[#4a9eff] transition-colors";
+const inputWithIconCls = "w-full bg-[#0d1421] border border-[#1a2332] rounded-sm pl-9 pr-4 py-3 text-sm text-[#e2e8f0] placeholder-[#2a3548] focus:outline-none focus:border-[#4a9eff] transition-colors";
+const btnPrimary = "w-full py-3 bg-[#4a9eff] text-[#080f1a] text-sm font-semibold rounded-sm hover:bg-[#3b8fe0] transition-all disabled:opacity-30 disabled:cursor-not-allowed";
+const errBox = "flex items-center gap-2 text-[11px] text-[#f87171] bg-[#140a0a] border border-[#2a1010] rounded-sm px-3 py-2.5";
+const label = "block text-[10px] font-semibold text-[#4a5568] uppercase tracking-widest mb-2";
+
+function Spinner() {
+  return <span className="w-4 h-4 border-2 border-[#080f1a]/30 border-t-[#080f1a] rounded-full animate-spin inline-block" />;
+}
 
 function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void }) {
-  const [step, setStep] = useState<AuthStep>("phone");
-  const [phone, setPhone] = useState("");
+  const [step, setStep] = useState<AuthStep>("login");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [email, setEmail] = useState("");
   const [code, setCode] = useState(["", "", "", "", "", ""]);
+  const [tempToken, setTempToken] = useState("");
+  const [purpose, setPurpose] = useState<"register" | "login">("register");
   const [displayName, setDisplayName] = useState("");
-  const [purpose, setPurpose] = useState<"login" | "register">("login");
+  const [newUsername, setNewUsername] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newPassword2, setNewPassword2] = useState("");
+  const [organization, setOrganization] = useState("");
+  const [department, setDepartment] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
   const codeRefs = Array.from({ length: 6 }, () => null) as (HTMLInputElement | null)[];
 
-  // Countdown timer
   useEffect(() => {
     if (resendTimer <= 0) return;
-    const t = setTimeout(() => setResendTimer(s => s - 1), 1000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setResendTimer(s => s - 1), 1000);
+    return () => clearTimeout(timer);
   }, [resendTimer]);
 
-  const formatPhone = (raw: string) => {
-    const digits = raw.replace(/\D/g, "");
-    if (!digits) return "";
-    if (digits.length <= 1) return `+${digits}`;
-    if (digits.length <= 4) return `+${digits[0]} (${digits.slice(1)}`;
-    if (digits.length <= 7) return `+${digits[0]} (${digits.slice(1, 4)}) ${digits.slice(4)}`;
-    if (digits.length <= 9) return `+${digits[0]} (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
-    return `+${digits[0]} (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7, 9)}-${digits.slice(9, 11)}`;
-  };
+  const setErr = (msg: string) => setError(msg);
+  const clearErr = () => setError("");
 
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.replace(/\D/g, "").slice(0, 11);
-    setPhone(raw);
-    setError("");
-  };
-
-  const handleSend = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (phone.replace(/\D/g, "").length < 10) {
-      setError("Введите корректный номер телефона");
-      return;
-    }
-    setLoading(true);
-    setError("");
+  // ── Войти по паролю ──
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username.trim() || !password.trim()) { setErr("Заполните все поля"); return; }
+    setLoading(true); clearErr();
     try {
       const res = await fetch(API.auth, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "send", phone }),
+        body: JSON.stringify({ action: "login", username: username.trim(), password }),
       });
       const data = await res.json();
-      if (res.status === 429) {
-        setError(data.message || "Подождите перед повторной отправкой");
-        return;
-      }
-      if (!res.ok) {
-        setError(data.message || "Не удалось отправить код");
-        return;
-      }
+      if (!res.ok) { setErr(data.message || "Неверный никнейм или пароль"); return; }
+      localStorage.setItem("session_token", data.token);
+      onLogin(data.user, data.token);
+    } catch { setErr("Ошибка соединения"); }
+    finally { setLoading(false); }
+  };
+
+  // ── Отправить код на email ──
+  const handleSendCode = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!email.trim()) { setErr("Введите email"); return; }
+    setLoading(true); clearErr();
+    try {
+      const res = await fetch(API.auth, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "send_code", email: email.trim() }),
+      });
+      const data = await res.json();
+      if (res.status === 429) { setErr(data.message || "Подождите перед повторной отправкой"); return; }
+      if (!res.ok) { setErr(data.message || "Не удалось отправить письмо"); return; }
       setPurpose(data.purpose);
-      setStep(data.purpose === "register" ? "register" : "code");
+      setStep("email_code");
       setResendTimer(60);
       setCode(["", "", "", "", "", ""]);
-    } catch {
-      setError("Ошибка соединения с сервером");
-    } finally {
-      setLoading(false);
-    }
+    } catch { setErr("Ошибка соединения"); }
+    finally { setLoading(false); }
+  };
+
+  // ── Проверить код из email ──
+  const handleVerifyCode = async (codeArr?: string[]) => {
+    const codeStr = (codeArr || code).join("");
+    if (codeStr.length < 6) { setErr("Введите 6 цифр кода"); return; }
+    setLoading(true); clearErr();
+    try {
+      const res = await fetch(API.auth, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "verify_code", email: email.trim(), code: codeStr }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.message || "Неверный код"); setCode(["","","","","",""]); return; }
+      setTempToken(data.temp_token);
+      setStep(data.purpose === "register" ? "register" : "reset_password");
+    } catch { setErr("Ошибка соединения"); }
+    finally { setLoading(false); }
   };
 
   const handleCodeChange = (idx: number, val: string, refs: (HTMLInputElement | null)[]) => {
     const digit = val.replace(/\D/g, "").slice(-1);
-    const next = [...code];
-    next[idx] = digit;
-    setCode(next);
-    setError("");
+    const next = [...code]; next[idx] = digit; setCode(next); clearErr();
     if (digit && idx < 5) refs[idx + 1]?.focus();
-    if (next.every(d => d !== "")) handleVerify(next, refs);
+    if (next.every(d => d !== "")) handleVerifyCode(next);
   };
 
   const handleCodeKey = (idx: number, e: React.KeyboardEvent, refs: (HTMLInputElement | null)[]) => {
     if (e.key === "Backspace" && !code[idx] && idx > 0) refs[idx - 1]?.focus();
   };
 
-  const handleVerify = async (codeArr?: string[], _refs?: (HTMLInputElement | null)[]) => {
-    const codeStr = (codeArr || code).join("");
-    if (codeStr.length < 6) { setError("Введите 6 цифр кода"); return; }
-    setLoading(true);
-    setError("");
+  // ── Завершить регистрацию ──
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!displayName.trim()) { setErr("Введите имя"); return; }
+    if (!newUsername.trim()) { setErr("Введите никнейм"); return; }
+    if (newPassword.length < 6) { setErr("Пароль должен быть не менее 6 символов"); return; }
+    if (newPassword !== newPassword2) { setErr("Пароли не совпадают"); return; }
+    setLoading(true); clearErr();
     try {
       const res = await fetch(API.auth, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "verify", phone, code: codeStr, display_name: displayName }),
+        body: JSON.stringify({
+          action: "register",
+          email: email.trim(),
+          temp_token: tempToken,
+          username: newUsername.trim(),
+          password: newPassword,
+          display_name: displayName.trim(),
+          organization: organization.trim(),
+          department: department.trim(),
+        }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setError(data.message || "Неверный код");
-        setCode(["", "", "", "", "", ""]);
-        return;
-      }
+      if (!res.ok) { setErr(data.message || "Ошибка регистрации"); return; }
       localStorage.setItem("session_token", data.token);
       onLogin(data.user, data.token);
-    } catch {
-      setError("Ошибка соединения");
-    } finally {
-      setLoading(false);
-    }
+    } catch { setErr("Ошибка соединения"); }
+    finally { setLoading(false); }
   };
 
-  const handleRegisterNext = (e: React.FormEvent) => {
+  // ── Сброс пароля ──
+  const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!displayName.trim() || displayName.trim().split(" ").length < 2) {
-      setError("Введите имя и фамилию");
-      return;
-    }
-    setError("");
-    setStep("code");
-    setResendTimer(60);
+    if (newPassword.length < 6) { setErr("Пароль должен быть не менее 6 символов"); return; }
+    if (newPassword !== newPassword2) { setErr("Пароли не совпадают"); return; }
+    setLoading(true); clearErr();
+    try {
+      const res = await fetch(API.auth, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reset", email: email.trim(), temp_token: tempToken, password: newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.message || "Ошибка сброса пароля"); return; }
+      localStorage.setItem("session_token", data.token);
+      onLogin(data.user, data.token);
+    } catch { setErr("Ошибка соединения"); }
+    finally { setLoading(false); }
   };
 
-  const formattedPhone = formatPhone(phone);
   const codeComplete = code.every(d => d !== "");
 
   return (
     <div className="flex h-screen w-screen overflow-hidden" style={{ background: "#080f1a" }}>
-      {/* Left decorative panel */}
+      {/* Left panel */}
       <div className="hidden lg:flex w-[420px] flex-shrink-0 flex-col justify-between p-10 relative overflow-hidden border-r border-[#1a2332]">
         <div className="absolute inset-0" style={{
           background: "radial-gradient(ellipse at 30% 50%, rgba(74,158,255,0.06) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(34,197,94,0.04) 0%, transparent 50%)"
         }} />
-        {/* Grid lines */}
         <div className="absolute inset-0 opacity-[0.03]" style={{
           backgroundImage: "linear-gradient(#4a9eff 1px, transparent 1px), linear-gradient(90deg, #4a9eff 1px, transparent 1px)",
           backgroundSize: "40px 40px"
@@ -257,20 +298,12 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
             <span className="text-sm font-semibold text-[#e2e8f0] tracking-wide">Друг</span>
           </div>
           <div>
-            <h1 className="text-3xl font-semibold text-[#e2e8f0] leading-snug mb-4">
-              Корпоративный<br />мессенджер
-            </h1>
-            <p className="text-sm text-[#4a5568] leading-relaxed">
-              Безопасная связь для вашей команды. Чаты, звонки, файлы и боты в одном месте.
-            </p>
+            <h1 className="text-3xl font-semibold text-[#e2e8f0] leading-snug mb-4">Корпоративный<br />мессенджер</h1>
+            <p className="text-sm text-[#4a5568] leading-relaxed">Безопасная связь для вашей команды. Чаты, звонки, файлы и боты в одном месте.</p>
           </div>
         </div>
         <div className="relative z-10 space-y-3">
-          {[
-            { icon: "Shield", text: "Сквозное шифрование" },
-            { icon: "Zap", text: "Мгновенная доставка" },
-            { icon: "Users", text: "До 10 000 пользователей" },
-          ].map(f => (
+          {[{ icon: "Shield", text: "Сквозное шифрование" }, { icon: "Zap", text: "Мгновенная доставка" }, { icon: "Users", text: "До 10 000 пользователей" }].map(f => (
             <div key={f.text} className="flex items-center gap-3">
               <div className="w-7 h-7 rounded-sm bg-[#1a2332] border border-[#2a3548] flex items-center justify-center">
                 <Icon name={f.icon} size={13} className="text-[#4a9eff]" />
@@ -281,11 +314,9 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
         </div>
       </div>
 
-      {/* Right — auth form */}
-      <div className="flex-1 flex items-center justify-center px-8">
+      {/* Right — form */}
+      <div className="flex-1 flex items-center justify-center px-8 overflow-y-auto py-10">
         <div className="w-full max-w-sm">
-
-          {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-3 mb-10">
             <div className="w-9 h-9 rounded-sm bg-[#4a9eff] flex items-center justify-center">
               <span className="text-[#080f1a] font-bold text-base">Д</span>
@@ -293,152 +324,219 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
             <span className="text-sm font-semibold text-[#e2e8f0]">Друг</span>
           </div>
 
-          {/* STEP: PHONE */}
-          {step === "phone" && (
+          {/* STEP: LOGIN */}
+          {step === "login" && (
             <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
               <div className="mb-8">
-                <h2 className="text-xl font-semibold text-[#e2e8f0] mb-1.5">Вход или регистрация</h2>
-                <p className="text-xs text-[#4a5568]">Введите номер телефона — пришлём код</p>
+                <h2 className="text-xl font-semibold text-[#e2e8f0] mb-1.5">Вход</h2>
+                <p className="text-xs text-[#4a5568]">Введите никнейм и пароль</p>
               </div>
-              <form onSubmit={handleSend} className="space-y-4">
+              <form onSubmit={handleLogin} className="space-y-4">
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#4a5568] uppercase tracking-widest mb-2">Номер телефона</label>
+                  <label className={label}>Никнейм</label>
                   <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                      <Icon name="Smartphone" size={15} className="text-[#4a5568]" />
-                    </div>
-                    <input
-                      type="tel"
-                      value={formattedPhone}
-                      onChange={handlePhoneChange}
-                      placeholder="+7 (900) 000-00-00"
-                      autoFocus
-                      className="w-full bg-[#0d1421] border border-[#1a2332] rounded-sm pl-9 pr-4 py-3 text-sm text-[#e2e8f0] placeholder-[#2a3548] focus:outline-none focus:border-[#4a9eff] transition-colors font-mono"
-                    />
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="AtSign" size={15} className="text-[#4a5568]" /></div>
+                    <input type="text" value={username} onChange={e => { setUsername(e.target.value); clearErr(); }}
+                      placeholder="username" autoFocus autoComplete="username"
+                      className={inputWithIconCls} />
                   </div>
                 </div>
-                {error && (
-                  <div className="flex items-center gap-2 text-[11px] text-[#f87171] bg-[#140a0a] border border-[#2a1010] rounded-sm px-3 py-2.5">
-                    <Icon name="AlertCircle" size={12} />
-                    {error}
-                  </div>
-                )}
-                <button type="submit" disabled={loading || phone.replace(/\D/g, "").length < 10}
-                  className="w-full py-3 bg-[#4a9eff] text-[#080f1a] text-sm font-semibold rounded-sm hover:bg-[#3b8fe0] transition-all disabled:opacity-30 disabled:cursor-not-allowed">
-                  {loading ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <span className="w-4 h-4 border-2 border-[#080f1a]/30 border-t-[#080f1a] rounded-full animate-spin inline-block" />
-                      Отправляем...
-                    </span>
-                  ) : "Получить код →"}
-                </button>
-              </form>
-            </div>
-          )}
-
-          {/* STEP: REGISTER (name) */}
-          {step === "register" && (
-            <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
-              <button onClick={() => setStep("phone")} className="flex items-center gap-1.5 text-xs text-[#4a5568] hover:text-[#94a3b8] mb-8 transition-colors">
-                <Icon name="ArrowLeft" size={13} /> Назад
-              </button>
-              <div className="mb-8">
-                <h2 className="text-xl font-semibold text-[#e2e8f0] mb-1.5">Добро пожаловать</h2>
-                <p className="text-xs text-[#4a5568]">Номер <span className="font-mono text-[#94a3b8]">{formattedPhone}</span> — новый. Как вас зовут?</p>
-              </div>
-              <form onSubmit={handleRegisterNext} className="space-y-4">
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#4a5568] uppercase tracking-widest mb-2">Имя и Фамилия</label>
-                  <input
-                    value={displayName}
-                    onChange={e => { setDisplayName(e.target.value); setError(""); }}
-                    placeholder="Иван Петров"
-                    autoFocus
-                    className="w-full bg-[#0d1421] border border-[#1a2332] rounded-sm px-4 py-3 text-sm text-[#e2e8f0] placeholder-[#2a3548] focus:outline-none focus:border-[#4a9eff] transition-colors"
-                  />
-                </div>
-                {error && (
-                  <div className="flex items-center gap-2 text-[11px] text-[#f87171] bg-[#140a0a] border border-[#2a1010] rounded-sm px-3 py-2.5">
-                    <Icon name="AlertCircle" size={12} />
-                    {error}
+                  <label className={label}>Пароль</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-[#4a5568]" /></div>
+                    <input type={showPass ? "text" : "password"} value={password}
+                      onChange={e => { setPassword(e.target.value); clearErr(); }}
+                      placeholder="••••••••" autoComplete="current-password"
+                      className={inputWithIconCls + " pr-10"} />
+                    <button type="button" onClick={() => setShowPass(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#4a5568] hover:text-[#94a3b8]">
+                      <Icon name={showPass ? "EyeOff" : "Eye"} size={15} />
+                    </button>
                   </div>
-                )}
-                <button type="submit" disabled={!displayName.trim()}
-                  className="w-full py-3 bg-[#4a9eff] text-[#080f1a] text-sm font-semibold rounded-sm hover:bg-[#3b8fe0] transition-all disabled:opacity-30">
-                  Продолжить →
+                </div>
+                {error && <div className={errBox}><Icon name="AlertCircle" size={12} />{error}</div>}
+                <button type="submit" disabled={loading || !username.trim() || !password.trim()} className={btnPrimary}>
+                  {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Входим...</span> : "Войти →"}
+                </button>
+              </form>
+              <div className="mt-6 flex justify-between items-center">
+                <button onClick={() => { setStep("forgot"); clearErr(); setEmail(""); }}
+                  className="text-xs text-[#4a5568] hover:text-[#94a3b8] transition-colors">
+                  Забыл пароль
+                </button>
+                <button onClick={() => { setStep("forgot"); clearErr(); setEmail(""); }}
+                  className="text-xs text-[#4a9eff] hover:text-[#7ab8ff] transition-colors">
+                  Регистрация →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP: FORGOT / REGISTER start (email input) */}
+          {step === "forgot" && (
+            <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
+              <button onClick={() => { setStep("login"); clearErr(); }} className="flex items-center gap-1.5 text-xs text-[#4a5568] hover:text-[#94a3b8] mb-8 transition-colors">
+                <Icon name="ArrowLeft" size={13} /> Назад
+              </button>
+              <div className="mb-8">
+                <h2 className="text-xl font-semibold text-[#e2e8f0] mb-1.5">Email</h2>
+                <p className="text-xs text-[#4a5568]">Введите email — пришлём код для входа или регистрации</p>
+              </div>
+              <form onSubmit={handleSendCode} className="space-y-4">
+                <div>
+                  <label className={label}>Email</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Mail" size={15} className="text-[#4a5568]" /></div>
+                    <input type="email" value={email} onChange={e => { setEmail(e.target.value); clearErr(); }}
+                      placeholder="you@company.ru" autoFocus autoComplete="email"
+                      className={inputWithIconCls} />
+                  </div>
+                </div>
+                {error && <div className={errBox}><Icon name="AlertCircle" size={12} />{error}</div>}
+                <button type="submit" disabled={loading || !email.trim()} className={btnPrimary}>
+                  {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Отправляем...</span> : "Получить код →"}
                 </button>
               </form>
             </div>
           )}
 
-          {/* STEP: CODE */}
-          {step === "code" && (
+          {/* STEP: EMAIL CODE */}
+          {step === "email_code" && (
             <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
-              <button onClick={() => { setStep(purpose === "register" ? "register" : "phone"); setCode(["","","","","",""]); }} className="flex items-center gap-1.5 text-xs text-[#4a5568] hover:text-[#94a3b8] mb-8 transition-colors">
+              <button onClick={() => { setStep("forgot"); setCode(["","","","","",""]); clearErr(); }} className="flex items-center gap-1.5 text-xs text-[#4a5568] hover:text-[#94a3b8] mb-8 transition-colors">
                 <Icon name="ArrowLeft" size={13} /> Назад
               </button>
               <div className="mb-8">
-                <h2 className="text-xl font-semibold text-[#e2e8f0] mb-1.5">
-                  {purpose === "register" ? "Подтверждение" : "Код из СМС"}
-                </h2>
-                <p className="text-xs text-[#4a5568]">
-                  Отправили 6-значный код на <span className="font-mono text-[#94a3b8]">{formattedPhone}</span>
-                </p>
+                <h2 className="text-xl font-semibold text-[#e2e8f0] mb-1.5">Код из письма</h2>
+                <p className="text-xs text-[#4a5568]">Отправили 6-значный код на <span className="text-[#94a3b8]">{email}</span></p>
               </div>
-
-              {/* 6-digit code input */}
               <div className="flex gap-2 mb-6">
                 {code.map((digit, idx) => (
-                  <input
-                    key={idx}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={digit}
+                  <input key={idx} type="text" inputMode="numeric" maxLength={1} value={digit}
                     ref={el => { codeRefs[idx] = el; }}
                     onChange={e => handleCodeChange(idx, e.target.value, codeRefs)}
                     onKeyDown={e => handleCodeKey(idx, e, codeRefs)}
                     onFocus={e => e.target.select()}
-                    className={`flex-1 h-14 text-center text-xl font-mono font-semibold bg-[#0d1421] border rounded-sm focus:outline-none transition-all
-                      ${digit ? "border-[#4a9eff] text-[#e2e8f0]" : "border-[#1a2332] text-[#4a5568]"}
-                      ${loading ? "opacity-50" : ""}
-                      focus:border-[#4a9eff]`}
-                    autoFocus={idx === 0}
-                  />
+                    className={`flex-1 h-14 text-center text-xl font-mono font-semibold bg-[#0d1421] border rounded-sm focus:outline-none transition-all ${digit ? "border-[#4a9eff] text-[#e2e8f0]" : "border-[#1a2332] text-[#4a5568]"} ${loading ? "opacity-50" : ""} focus:border-[#4a9eff]`}
+                    autoFocus={idx === 0} />
                 ))}
               </div>
-
-              {error && (
-                <div className="flex items-center gap-2 text-[11px] text-[#f87171] bg-[#140a0a] border border-[#2a1010] rounded-sm px-3 py-2.5 mb-4">
-                  <Icon name="AlertCircle" size={12} />
-                  {error}
-                </div>
-              )}
-
-              <button
-                onClick={() => handleVerify()}
-                disabled={!codeComplete || loading}
-                className="w-full py-3 bg-[#4a9eff] text-[#080f1a] text-sm font-semibold rounded-sm hover:bg-[#3b8fe0] transition-all disabled:opacity-30 mb-4"
-              >
-                {loading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="w-4 h-4 border-2 border-[#080f1a]/30 border-t-[#080f1a] rounded-full animate-spin inline-block" />
-                    Проверяем...
-                  </span>
-                ) : "Войти"}
+              {error && <div className={errBox + " mb-4"}><Icon name="AlertCircle" size={12} />{error}</div>}
+              <button onClick={() => handleVerifyCode()} disabled={!codeComplete || loading} className={btnPrimary + " mb-4"}>
+                {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Проверяем...</span> : "Продолжить →"}
               </button>
-
               <div className="text-center">
-                {resendTimer > 0 ? (
-                  <span className="text-xs text-[#4a5568]">
-                    Повторная отправка через <span className="font-mono text-[#94a3b8]">{resendTimer}с</span>
-                  </span>
-                ) : (
-                  <button onClick={() => handleSend()} className="text-xs text-[#4a9eff] hover:text-[#7ab8ff] transition-colors">
-                    Отправить код повторно
-                  </button>
-                )}
+                {resendTimer > 0
+                  ? <span className="text-xs text-[#4a5568]">Повторная отправка через <span className="font-mono text-[#94a3b8]">{resendTimer}с</span></span>
+                  : <button onClick={() => handleSendCode()} className="text-xs text-[#4a9eff] hover:text-[#7ab8ff] transition-colors">Отправить код повторно</button>
+                }
               </div>
+            </div>
+          )}
+
+          {/* STEP: REGISTER */}
+          {step === "register" && (
+            <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
+              <div className="mb-8">
+                <h2 className="text-xl font-semibold text-[#e2e8f0] mb-1.5">Регистрация</h2>
+                <p className="text-xs text-[#4a5568]">Заполните данные для создания аккаунта</p>
+              </div>
+              <form onSubmit={handleRegister} className="space-y-4">
+                <div>
+                  <label className={label}>Имя и фамилия</label>
+                  <input value={displayName} onChange={e => { setDisplayName(e.target.value); clearErr(); }}
+                    placeholder="Иван Петров" autoFocus className={inputCls} />
+                </div>
+                <div>
+                  <label className={label}>Никнейм</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="AtSign" size={15} className="text-[#4a5568]" /></div>
+                    <input value={newUsername} onChange={e => { setNewUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, "")); clearErr(); }}
+                      placeholder="ivan_petrov" autoComplete="username"
+                      className={inputWithIconCls} />
+                  </div>
+                  <p className="text-[10px] text-[#4a5568] mt-1">3–30 символов: латиница, цифры, _</p>
+                </div>
+                <div>
+                  <label className={label}>Организация</label>
+                  <input value={organization} onChange={e => { setOrganization(e.target.value); clearErr(); }}
+                    placeholder="ООО Ромашка" className={inputCls} />
+                </div>
+                <div>
+                  <label className={label}>Подразделение</label>
+                  <input value={department} onChange={e => { setDepartment(e.target.value); clearErr(); }}
+                    placeholder="Отдел разработки" className={inputCls} />
+                </div>
+                <div>
+                  <label className={label}>Пароль</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-[#4a5568]" /></div>
+                    <input type={showPass ? "text" : "password"} value={newPassword}
+                      onChange={e => { setNewPassword(e.target.value); clearErr(); }}
+                      placeholder="Минимум 6 символов" autoComplete="new-password"
+                      className={inputWithIconCls + " pr-10"} />
+                    <button type="button" onClick={() => setShowPass(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#4a5568] hover:text-[#94a3b8]">
+                      <Icon name={showPass ? "EyeOff" : "Eye"} size={15} />
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className={label}>Повторите пароль</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-[#4a5568]" /></div>
+                    <input type={showPass ? "text" : "password"} value={newPassword2}
+                      onChange={e => { setNewPassword2(e.target.value); clearErr(); }}
+                      placeholder="••••••••" autoComplete="new-password"
+                      className={inputWithIconCls} />
+                  </div>
+                </div>
+                {error && <div className={errBox}><Icon name="AlertCircle" size={12} />{error}</div>}
+                <button type="submit" disabled={loading || !displayName.trim() || !newUsername.trim() || newPassword.length < 6} className={btnPrimary}>
+                  {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Создаём аккаунт...</span> : "Создать аккаунт →"}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* STEP: RESET PASSWORD */}
+          {step === "reset_password" && (
+            <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
+              <div className="mb-8">
+                <h2 className="text-xl font-semibold text-[#e2e8f0] mb-1.5">Новый пароль</h2>
+                <p className="text-xs text-[#4a5568]">Придумайте новый пароль для аккаунта</p>
+              </div>
+              <form onSubmit={handleReset} className="space-y-4">
+                <div>
+                  <label className={label}>Новый пароль</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-[#4a5568]" /></div>
+                    <input type={showPass ? "text" : "password"} value={newPassword}
+                      onChange={e => { setNewPassword(e.target.value); clearErr(); }}
+                      placeholder="Минимум 6 символов" autoFocus autoComplete="new-password"
+                      className={inputWithIconCls + " pr-10"} />
+                    <button type="button" onClick={() => setShowPass(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#4a5568] hover:text-[#94a3b8]">
+                      <Icon name={showPass ? "EyeOff" : "Eye"} size={15} />
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className={label}>Повторите пароль</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-[#4a5568]" /></div>
+                    <input type={showPass ? "text" : "password"} value={newPassword2}
+                      onChange={e => { setNewPassword2(e.target.value); clearErr(); }}
+                      placeholder="••••••••" autoComplete="new-password"
+                      className={inputWithIconCls} />
+                  </div>
+                </div>
+                {error && <div className={errBox}><Icon name="AlertCircle" size={12} />{error}</div>}
+                <button type="submit" disabled={loading || newPassword.length < 6} className={btnPrimary}>
+                  {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Сохраняем...</span> : "Сохранить пароль →"}
+                </button>
+              </form>
             </div>
           )}
         </div>

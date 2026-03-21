@@ -1,0 +1,31 @@
+{
+  "tests": [
+    {
+      "name": "GET без сессии — 401",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 401
+    },
+    {
+      "name": "send_code без email — 400",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "send_code", "email": ""},
+      "expectedStatus": 400
+    },
+    {
+      "name": "verify_code неверный код — 401",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "verify_code", "email": "test@example.com", "code": "000000"},
+      "expectedStatus": 401
+    },
+    {
+      "name": "login неверные данные — 401",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "login", "username": "no_such_user", "password": "wrong"},
+      "expectedStatus": 401
+    }
+  ]
+}
