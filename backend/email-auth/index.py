@@ -1,5 +1,5 @@
 """
-Email-авторизация мессенджера Друг.
+Email-авторизация мессенджера Друг. v3
 POST / action=send_code   — отправить 6-значный код на email
 POST / action=verify_code — проверить код (возвращает purpose: register/login + temp_token)
 POST / action=register    — завершить регистрацию (username, password, display_name, organization, department)
@@ -58,12 +58,13 @@ def make_initials(name: str) -> str:
     return name[:2].upper() if name else "??"
 
 
-def send_email(to: str, subject: str, body: str) -> bool:
+def send_email(to: str, subject: str, body: str) -> bool:  # v2
     smtp_host = os.environ.get("SMTP_HOST", "")
     smtp_port = int(os.environ.get("SMTP_PORT", "465"))
     smtp_user = os.environ.get("SMTP_USER", "")
     smtp_pass = os.environ.get("SMTP_PASSWORD", "")
 
+    print(f"[SMTP] host={smtp_host!r} port={smtp_port} user={smtp_user!r} pass_set={bool(smtp_pass)}")
     if not smtp_host or not smtp_user or not smtp_pass:
         print(f"[DEV] Email to {to}: {subject}")
         return True
