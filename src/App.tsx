@@ -219,7 +219,6 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
     const digit = val.replace(/\D/g, "").slice(-1);
     const next = [...code]; next[idx] = digit; setCode(next); clearErr();
     if (digit && idx < 5) refs[idx + 1]?.focus();
-    if (next.every(d => d !== "")) handleVerifyCode(next);
   };
 
   const handleCodeKey = (idx: number, e: React.KeyboardEvent, refs: (HTMLInputElement | null)[]) => {
@@ -418,7 +417,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
                     onChange={e => handleCodeChange(idx, e.target.value, codeRefs)}
                     onKeyDown={e => handleCodeKey(idx, e, codeRefs)}
                     onFocus={e => e.target.select()}
-                    className={`flex-1 h-14 text-center text-xl font-mono font-semibold bg-[#0d1421] border rounded-sm focus:outline-none transition-all ${digit ? "border-[#4a9eff] text-[#e2e8f0]" : "border-[#1a2332] text-[#4a5568]"} ${loading ? "opacity-50" : ""} focus:border-[#4a9eff]`}
+                    className={`w-10 h-10 text-center text-[20px] font-mono font-semibold bg-[#0d1421] border rounded-sm focus:outline-none transition-all ${digit ? "border-[#4a9eff] text-[#e2e8f0]" : "border-[#1a2332] text-[#4a5568]"} ${loading ? "opacity-50" : ""} focus:border-[#4a9eff]`}
                     autoFocus={idx === 0} />
                 ))}
               </div>
