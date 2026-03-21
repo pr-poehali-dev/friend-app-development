@@ -1,11 +1,18 @@
 """
 API сообщений мессенджера Друг.
-GET /?chat_id=X - сообщения чата
-POST / - отправить сообщение
+GET  /?chat_id=X  — сообщения чата
+POST /            — отправить текстовое сообщение
+POST /upload      — загрузить файл в чат (base64)
 """
 import json
 import os
+import base64
+import mimetypes
+import uuid
+import boto3
 import psycopg2
+
+SCHEMA = os.environ.get("MAIN_DB_SCHEMA", "public")
 
 CORS = {
     "Access-Control-Allow-Origin": "*",
@@ -18,16 +25,28 @@ def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
 
 
+def t(table):
+    return f"{SCHEMA}.{table}"
+
+
 def get_user_by_session(cur, session_id):
     if not session_id:
         return None
     cur.execute(
-        """SELECT u.id, u.display_name, u.avatar_initials
-           FROM sessions s JOIN users u ON u.id = s.user_id
+        f"""SELECT u.id, u.display_name, u.avatar_initials
+           FROM {t('sessions')} s JOIN {t('users')} u ON u.id = s.user_id
            WHERE s.token = %s AND s.expires_at > NOW()""",
         (session_id,)
     )
     return cur.fetchone()
+
+
+def fmt_size(size_bytes: int) -> str:
+    if size_bytes < 1024:
+        return f"{size_bytes} Б"
+    if size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} КБ"
+    return f"{size_bytes / 1024 / 1024:.1f} МБ"
 
 
 def handler(event: dict, context) -> dict:
@@ -35,6 +54,7 @@ def handler(event: dict, context) -> dict:
         return {"statusCode": 200, "headers": CORS, "body": ""}
 
     method = event.get("httpMethod", "GET")
+    path = event.get("path", "/")
     headers = event.get("headers") or {}
     session_id = headers.get("x-session-id") or headers.get("X-Session-Id")
 
@@ -54,22 +74,21 @@ def handler(event: dict, context) -> dict:
             if not chat_id:
                 return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "chat_id required"})}
 
-            # Проверить что пользователь член чата
             cur.execute(
-                "SELECT 1 FROM chat_members WHERE chat_id = %s AND user_id = %s",
+                f"SELECT 1 FROM {t('chat_members')} WHERE chat_id = %s AND user_id = %s",
                 (chat_id, user_id)
             )
             if not cur.fetchone():
                 return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "forbidden"})}
 
             cur.execute(
-                """SELECT m.id, m.text, m.msg_type, m.file_name, m.file_size,
+                f"""SELECT m.id, m.text, m.msg_type, m.file_name, m.file_size, m.file_url,
                           m.created_at, m.sender_id,
                           u.display_name, u.avatar_initials
-                   FROM messages m JOIN users u ON u.id = m.sender_id
+                   FROM {t('messages')} m JOIN {t('users')} u ON u.id = m.sender_id
                    WHERE m.chat_id = %s
                    ORDER BY m.created_at ASC
-                   LIMIT 100""",
+                   LIMIT 200""",
                 (chat_id,)
             )
             rows = cur.fetchall()
@@ -80,18 +99,74 @@ def handler(event: dict, context) -> dict:
                     "type": r[2],
                     "file_name": r[3],
                     "file_size": r[4],
-                    "time": r[5].strftime("%H:%M"),
-                    "sender_id": r[6],
-                    "sender_name": r[7],
-                    "sender_avatar": r[8],
-                    "own": r[6] == user_id,
+                    "file_url": r[5],
+                    "time": r[6].strftime("%H:%M"),
+                    "sender_id": r[7],
+                    "sender_name": r[8],
+                    "sender_avatar": r[9],
+                    "own": r[7] == user_id,
                 }
                 for r in rows
             ]
             return {"statusCode": 200, "headers": CORS, "body": json.dumps({"messages": messages})}
 
-        # POST — отправить сообщение
         if method == "POST":
+            # POST /upload — отправить файл
+            if "upload" in path:
+                body = json.loads(event.get("body") or "{}")
+                chat_id = body.get("chat_id")
+                file_name = body.get("file_name", "file")
+                file_data_b64 = body.get("file_data", "")
+
+                if not chat_id or not file_data_b64:
+                    return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "chat_id and file_data required"})}
+
+                cur.execute(
+                    f"SELECT 1 FROM {t('chat_members')} WHERE chat_id = %s AND user_id = %s",
+                    (chat_id, user_id)
+                )
+                if not cur.fetchone():
+                    return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "forbidden"})}
+
+                file_bytes = base64.b64decode(file_data_b64)
+                size_str = fmt_size(len(file_bytes))
+                ext = file_name.rsplit(".", 1)[-1].lower() if "." in file_name else "bin"
+                mime = mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+                key = f"chat_files/{chat_id}/{uuid.uuid4().hex}.{ext}"
+
+                s3 = boto3.client(
+                    "s3",
+                    endpoint_url="https://bucket.poehali.dev",
+                    aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+                    aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+                )
+                s3.put_object(Bucket="files", Key=key, Body=file_bytes, ContentType=mime)
+                file_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+
+                cur.execute(
+                    f"""INSERT INTO {t('messages')} (chat_id, sender_id, text, msg_type, file_name, file_size, file_url)
+                       VALUES (%s, %s, %s, 'file', %s, %s, %s) RETURNING id, created_at""",
+                    (chat_id, user_id, "", file_name, size_str, file_url)
+                )
+                row = cur.fetchone()
+                conn.commit()
+
+                message = {
+                    "id": row[0],
+                    "text": "",
+                    "type": "file",
+                    "file_name": file_name,
+                    "file_size": size_str,
+                    "file_url": file_url,
+                    "time": row[1].strftime("%H:%M"),
+                    "sender_id": user_id,
+                    "sender_name": user_name,
+                    "sender_avatar": user_avatar,
+                    "own": True,
+                }
+                return {"statusCode": 200, "headers": CORS, "body": json.dumps({"message": message})}
+
+            # POST / — текстовое сообщение
             body = json.loads(event.get("body") or "{}")
             chat_id = body.get("chat_id")
             text = (body.get("text") or "").strip()
@@ -99,16 +174,15 @@ def handler(event: dict, context) -> dict:
             if not chat_id or not text:
                 return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "chat_id and text required"})}
 
-            # Проверить членство
             cur.execute(
-                "SELECT 1 FROM chat_members WHERE chat_id = %s AND user_id = %s",
+                f"SELECT 1 FROM {t('chat_members')} WHERE chat_id = %s AND user_id = %s",
                 (chat_id, user_id)
             )
             if not cur.fetchone():
                 return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "forbidden"})}
 
             cur.execute(
-                """INSERT INTO messages (chat_id, sender_id, text, msg_type)
+                f"""INSERT INTO {t('messages')} (chat_id, sender_id, text, msg_type)
                    VALUES (%s, %s, %s, 'text') RETURNING id, created_at""",
                 (chat_id, user_id, text)
             )
@@ -119,6 +193,9 @@ def handler(event: dict, context) -> dict:
                 "id": row[0],
                 "text": text,
                 "type": "text",
+                "file_name": None,
+                "file_size": None,
+                "file_url": None,
                 "time": row[1].strftime("%H:%M"),
                 "sender_id": user_id,
                 "sender_name": user_name,

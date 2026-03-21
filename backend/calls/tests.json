@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "name": "GET без сессии — 401",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 401
+    },
+    {
+      "name": "POST без сессии — 401",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "start"},
+      "expectedStatus": 401
+    }
+  ]
+}

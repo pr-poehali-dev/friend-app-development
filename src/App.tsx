@@ -7,6 +7,7 @@ const API = {
   messages: "https://functions.poehali.dev/3a4d8e8d-6ec2-41f4-8084-57c7800b94a3",
   profile: "https://functions.poehali.dev/eb1e5ec8-553a-4b79-a005-3fa365d9667b",
   avatar: "https://functions.poehali.dev/164ba4b4-9b9c-4668-8ca1-0bf6fbcbf6ab",
+  calls: "https://functions.poehali.dev/af1c4fda-8213-498e-baac-420159c8fc6e",
 };
 
 type Section = "chats" | "contacts" | "calls" | "video" | "files" | "bots" | "settings" | "analytics";
@@ -41,11 +42,24 @@ interface Message {
   type: string;
   file_name?: string;
   file_size?: string;
+  file_url?: string;
   time: string;
   sender_id: number;
   sender_name: string;
   sender_avatar: string;
   own: boolean;
+}
+
+interface CallRecord {
+  id: number;
+  type: "incoming" | "outgoing" | "missed";
+  call_type: string;
+  status: string;
+  name: string;
+  avatar: string;
+  time: string;
+  duration: string;
+  is_video: boolean;
 }
 
 interface Contact {
@@ -812,6 +826,22 @@ export default function App() {
   const [micMuted, setMicMuted] = useState(false);
   const [camOff, setCamOff] = useState(false);
 
+  // Звонки
+  const [callHistory, setCallHistory] = useState<CallRecord[]>([]);
+  const [loadingCalls, setLoadingCalls] = useState(false);
+  const [activeCallId, setActiveCallId] = useState<number | null>(null);
+  const [callTarget, setCallTarget] = useState<Contact | null>(null);
+  const [callType, setCallType] = useState<"audio" | "video">("audio");
+  const [incomingCall, setIncomingCall] = useState<{id: number; caller_name: string; caller_avatar: string; call_type: string} | null>(null);
+  const [peerConnection, setPeerConnection] = useState<RTCPeerConnection | null>(null);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [callDuration, setCallDuration] = useState(0);
+  const [signalingLastId, setSignalingLastId] = useState(0);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [contactSearch, setContactSearch] = useState("");
+  const [showAddContact, setShowAddContact] = useState(false);
+
   // Check existing session
   useEffect(() => {
     const token = localStorage.getItem("session_token");
@@ -909,6 +939,193 @@ export default function App() {
       setSendingMsg(false);
     }
   };
+
+  // Загрузка файла в чат
+  const handleFileUpload = async (file: File) => {
+    if (!activeChat || uploadingFile) return;
+    setUploadingFile(true);
+    try {
+      const reader = new FileReader();
+      const b64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve((reader.result as string).split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch(`${API.messages}/upload`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ chat_id: activeChat.id, file_name: file.name, file_data: b64 }),
+      });
+      const data = await res.json();
+      if (data.message) {
+        setMessages(prev => [...prev, data.message]);
+        loadChats();
+      }
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  // Загрузка истории звонков
+  const loadCallHistory = useCallback(async () => {
+    if (!sessionToken) return;
+    setLoadingCalls(true);
+    try {
+      const res = await fetch(`${API.calls}/history`, { headers: authHeaders() });
+      const data = await res.json();
+      if (data.calls) setCallHistory(data.calls);
+    } finally {
+      setLoadingCalls(false);
+    }
+  }, [sessionToken]);
+
+  useEffect(() => {
+    if (section === "calls" && sessionToken) loadCallHistory();
+  }, [section, sessionToken]);
+
+  // Проверка входящих звонков каждые 3 секунды
+  useEffect(() => {
+    if (!sessionToken) return;
+    const iv = setInterval(async () => {
+      if (activeCallId) return;
+      const res = await fetch(`${API.calls}/incoming`, { headers: authHeaders() });
+      const data = await res.json();
+      if (data.call) setIncomingCall(data.call);
+    }, 3000);
+    return () => clearInterval(iv);
+  }, [sessionToken, activeCallId]);
+
+  // Polling WebRTC сигналов
+  useEffect(() => {
+    if (!activeCallId || !peerConnection) return;
+    const iv = setInterval(async () => {
+      const res = await fetch(`${API.calls}/signals?call_id=${activeCallId}&after_id=${signalingLastId}`, { headers: authHeaders() });
+      const data = await res.json();
+      if (!data.signals?.length) return;
+      for (const sig of data.signals) {
+        setSignalingLastId(sig.id);
+        if (sig.type === "offer") {
+          await peerConnection.setRemoteDescription(JSON.parse(sig.payload));
+          const answer = await peerConnection.createAnswer();
+          await peerConnection.setLocalDescription(answer);
+          await sendSignal(activeCallId, sig.from, "answer", answer);
+        } else if (sig.type === "answer") {
+          await peerConnection.setRemoteDescription(JSON.parse(sig.payload));
+        } else if (sig.type === "candidate") {
+          await peerConnection.addIceCandidate(JSON.parse(sig.payload));
+        } else if (sig.type === "hangup") {
+          endCall();
+        }
+      }
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [activeCallId, peerConnection, signalingLastId]);
+
+  const sendSignal = async (callId: number, toUserId: number, type: string, payload: unknown) => {
+    await fetch(`${API.calls}/signal`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ call_id: callId, to_user_id: toUserId, type, payload }),
+    });
+  };
+
+  const createPeerConnection = (callId: number, targetUserId: number) => {
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+      ],
+    });
+    pc.onicecandidate = (e) => {
+      if (e.candidate) sendSignal(callId, targetUserId, "candidate", e.candidate);
+    };
+    pc.ontrack = (e) => {
+      const stream = new MediaStream();
+      stream.addTrack(e.track);
+      setRemoteStream(stream);
+    };
+    return pc;
+  };
+
+  const startCall = async (contact: Contact, type: "audio" | "video") => {
+    setCallTarget(contact);
+    setCallType(type);
+    setActiveCall(true);
+    setCallDuration(0);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === "video" });
+      setLocalStream(stream);
+      const callRes = await fetch(`${API.calls}/start`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ callee_id: contact.id, call_type: type }),
+      });
+      const callData = await callRes.json();
+      const callId = callData.call_id;
+      setActiveCallId(callId);
+      const pc = createPeerConnection(callId, contact.id);
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await sendSignal(callId, contact.id, "offer", offer);
+      setPeerConnection(pc);
+    } catch {
+      setActiveCall(false);
+    }
+  };
+
+  const answerCall = async (call: typeof incomingCall) => {
+    if (!call) return;
+    setIncomingCall(null);
+    setActiveCallId(call.id);
+    setCallType(call.call_type as "audio" | "video");
+    setActiveCall(true);
+    setCallDuration(0);
+    await fetch(`${API.calls}/answer`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ call_id: call.id, accepted: true }),
+    });
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: call.call_type === "video" });
+      setLocalStream(stream);
+      const pc = createPeerConnection(call.id, 0);
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+      setPeerConnection(pc);
+    } catch (e) { console.warn("media error", e); }
+  };
+
+  const endCall = async () => {
+    if (activeCallId) {
+      await fetch(`${API.calls}/end`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ call_id: activeCallId }),
+      });
+      if (peerConnection) {
+        await sendSignal(activeCallId, callTarget?.id || 0, "hangup", {});
+      }
+    }
+    localStream?.getTracks().forEach(t => t.stop());
+    peerConnection?.close();
+    setLocalStream(null);
+    setRemoteStream(null);
+    setPeerConnection(null);
+    setActiveCallId(null);
+    setCallTarget(null);
+    setActiveCall(false);
+    setActiveVideo(false);
+    setCallDuration(0);
+  };
+
+  // Таймер длительности звонка
+  useEffect(() => {
+    if (!activeCall) return;
+    const iv = setInterval(() => setCallDuration(d => d + 1), 1000);
+    return () => clearInterval(iv);
+  }, [activeCall]);
+
+  const formatDuration = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
   const handleLogin = (user: User, token: string) => {
     setCurrentUser(user);
@@ -1084,13 +1301,13 @@ export default function App() {
                           <div className={`rounded-sm px-3 py-2 text-xs leading-relaxed
                             ${msg.own ? "bg-[#1a3a5c] border border-[#2a4a6c] text-[#e2e8f0]" : "bg-[#111827] border border-[#1a2332] text-[#cbd5e1]"}`}>
                             {msg.type === "file" ? (
-                              <div className="flex items-center gap-2.5">
-                                <Icon name="FileText" size={16} className="text-[#4a9eff]" />
-                                <div>
-                                  <div className="font-medium text-[#e2e8f0]">{msg.file_name}</div>
-                                  <div className="text-[10px] text-[#4a5568]">{msg.file_size}</div>
+                              <a href={msg.file_url || "#"} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+                                <Icon name={/\.(png|jpe?g|gif|webp|svg)$/i.test(msg.file_name || "") ? "Image" : /\.(zip|rar|7z|tar)$/i.test(msg.file_name || "") ? "Archive" : "FileText"} size={18} className="text-[#4a9eff] flex-shrink-0" />
+                                <div className="min-w-0">
+                                  <div className="font-medium text-[#e2e8f0] truncate max-w-[180px]">{msg.file_name}</div>
+                                  <div className="text-[10px] text-[#4a5568] flex items-center gap-1">{msg.file_size} <Icon name="Download" size={10} /></div>
                                 </div>
-                              </div>
+                              </a>
                             ) : msg.text}
                           </div>
                           <span className="text-[10px] text-[#4a5568] font-mono mx-1">{msg.time}</span>
@@ -1100,10 +1317,17 @@ export default function App() {
                   </div>
 
                   <div className="px-5 py-3 border-t border-[#1a2332] bg-[#0a1120] flex-shrink-0">
+                    {uploadingFile && (
+                      <div className="flex items-center gap-2 text-[11px] text-[#4a9eff] mb-2">
+                        <div className="w-3 h-3 border border-[#4a9eff] border-t-transparent rounded-full animate-spin" />
+                        Загружаем файл...
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 bg-[#111827] border border-[#1a2332] rounded-sm px-3 py-2 focus-within:border-[#4a9eff] transition-colors">
-                      <button className="text-[#4a5568] hover:text-[#94a3b8] transition-colors">
+                      <label className="text-[#4a5568] hover:text-[#94a3b8] transition-colors cursor-pointer">
                         <Icon name="Paperclip" size={16} />
-                      </button>
+                        <input type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ""; }} />
+                      </label>
                       <input
                         value={msgInput}
                         onChange={e => setMsgInput(e.target.value)}
@@ -1111,9 +1335,6 @@ export default function App() {
                         placeholder="Написать сообщение..."
                         className="flex-1 bg-transparent text-xs text-[#e2e8f0] placeholder-[#4a5568] focus:outline-none"
                       />
-                      <button className="text-[#4a5568] hover:text-[#94a3b8] transition-colors">
-                        <Icon name="Smile" size={16} />
-                      </button>
                       <button
                         onClick={handleSend}
                         disabled={sendingMsg || !msgInput.trim()}
@@ -1137,97 +1358,139 @@ export default function App() {
         )}
 
         {/* CONTACTS */}
-        {section === "contacts" && (
-          <div className="flex flex-1 overflow-hidden">
-            <div className="w-72 flex flex-col border-r border-[#1a2332] bg-[#0a1120] flex-shrink-0">
-              <div className="px-4 pt-4 pb-3 border-b border-[#1a2332]">
-                <h2 className="text-xs font-semibold text-[#e2e8f0] tracking-widest uppercase mb-3">Контакты</h2>
-                <div className="relative">
-                  <Icon name="Search" size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#4a5568]" />
-                  <input placeholder="Поиск сотрудника..." className="w-full bg-[#111827] border border-[#1a2332] rounded-sm pl-7 pr-3 py-1.5 text-xs text-[#94a3b8] placeholder-[#4a5568] focus:outline-none focus:border-[#4a9eff]" />
-                </div>
-              </div>
-              <div className="flex-1 overflow-y-auto">
-                {contacts.map(c => (
-                  <div key={c.id} className="flex items-center gap-3 px-4 py-3 border-b border-[#0d1421] hover:bg-[#0e1627] cursor-pointer transition-colors">
-                    <AvatarBadge initials={c.avatar_initials} online={c.online} />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium text-[#e2e8f0] truncate">{c.display_name}</div>
-                      <div className="text-[11px] text-[#4a5568] truncate">{c.position}</div>
-                    </div>
+        {section === "contacts" && (() => {
+          const filtered = contacts.filter(c =>
+            c.display_name.toLowerCase().includes(contactSearch.toLowerCase()) ||
+            (c.department || "").toLowerCase().includes(contactSearch.toLowerCase()) ||
+            (c.position || "").toLowerCase().includes(contactSearch.toLowerCase())
+          );
+          const importFromPhone = async () => {
+            if (!("contacts" in navigator)) { alert("Ваш браузер не поддерживает импорт контактов"); return; }
+            try {
+              const props = ["name", "tel"];
+              // @ts-expect-error Contact Picker API
+              const imported = await navigator.contacts.select(props, { multiple: true });
+              alert(`Импортировано ${imported.length} контактов`);
+            } catch { alert("Не удалось получить доступ к контактам"); }
+          };
+          return (
+            <div className="flex flex-1 overflow-hidden">
+              <div className="w-72 flex flex-col border-r border-[#1a2332] bg-[#0a1120] flex-shrink-0">
+                <div className="px-4 pt-4 pb-3 border-b border-[#1a2332]">
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-xs font-semibold text-[#e2e8f0] tracking-widest uppercase">Контакты</h2>
+                    <span className="text-[10px] text-[#4a5568]">{contacts.length}</span>
                   </div>
-                ))}
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto px-8 py-6">
-              <h3 className="text-[10px] font-semibold text-[#4a5568] tracking-widest uppercase mb-4">Все сотрудники</h3>
-              <div className="grid grid-cols-2 gap-3 max-w-2xl">
-                {contacts.map(c => (
-                  <div key={c.id} className="bg-[#0a1120] border border-[#1a2332] rounded-sm p-4 hover:border-[#2a3548] transition-colors">
-                    <div className="flex items-center gap-3 mb-3">
-                      <AvatarBadge initials={c.avatar_initials} size="lg" online={c.online} />
-                      <div>
-                        <div className="text-sm font-medium text-[#e2e8f0]">{c.display_name}</div>
-                        <div className="text-[11px] text-[#4a9eff]">{c.department}</div>
+                  <div className="relative">
+                    <Icon name="Search" size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#4a5568]" />
+                    <input value={contactSearch} onChange={e => setContactSearch(e.target.value)} placeholder="Поиск..." className="w-full bg-[#111827] border border-[#1a2332] rounded-sm pl-7 pr-3 py-1.5 text-xs text-[#94a3b8] placeholder-[#4a5568] focus:outline-none focus:border-[#4a9eff]" />
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                  {filtered.map(c => (
+                    <div key={c.id} className="flex items-center gap-3 px-4 py-3 border-b border-[#0d1421] hover:bg-[#0e1627] cursor-pointer transition-colors">
+                      <AvatarBadge initials={c.avatar_initials} online={c.online} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-[#e2e8f0] truncate">{c.display_name}</div>
+                        <div className="text-[11px] text-[#4a5568] truncate">{c.position || c.department}</div>
                       </div>
                     </div>
-                    <div className="text-[11px] text-[#4a5568] mb-1">{c.position}</div>
-                    <div className="text-[11px] font-mono text-[#4a5568]">{c.phone}</div>
-                    <div className="flex gap-1.5 mt-3">
-                      <button
-                        onClick={() => openChatWith(c.id)}
-                        className="flex-1 py-1.5 text-[10px] bg-[#1a2332] border border-[#2a3548] rounded-sm text-[#94a3b8] hover:border-[#4a9eff] hover:text-[#4a9eff] transition-colors flex items-center justify-center gap-1">
-                        <Icon name="MessageSquare" size={11} /> Написать
-                      </button>
-                      <button
-                        onClick={() => setActiveCall(true)}
-                        className="flex-1 py-1.5 text-[10px] bg-[#1a2332] border border-[#2a3548] rounded-sm text-[#94a3b8] hover:border-[#22c55e] hover:text-[#22c55e] transition-colors flex items-center justify-center gap-1">
-                        <Icon name="Phone" size={11} /> Звонок
-                      </button>
-                    </div>
+                  ))}
+                  {filtered.length === 0 && (
+                    <div className="p-4 text-xs text-[#4a5568] text-center">Ничего не найдено</div>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto px-8 py-6">
+                <div className="flex items-center justify-between mb-5 max-w-2xl">
+                  <h3 className="text-[10px] font-semibold text-[#4a5568] tracking-widest uppercase">Все сотрудники ({filtered.length})</h3>
+                  <div className="flex gap-2">
+                    <button onClick={importFromPhone} className="px-3 py-1.5 text-[10px] bg-[#1a2332] border border-[#2a3548] rounded-sm text-[#94a3b8] hover:border-[#4a9eff] hover:text-[#4a9eff] transition-colors flex items-center gap-1.5">
+                      <Icon name="Smartphone" size={11} /> Импорт
+                    </button>
                   </div>
-                ))}
+                </div>
+                <div className="grid grid-cols-2 gap-3 max-w-2xl">
+                  {filtered.map(c => (
+                    <div key={c.id} className="bg-[#0a1120] border border-[#1a2332] rounded-sm p-4 hover:border-[#2a3548] transition-colors">
+                      <div className="flex items-center gap-3 mb-3">
+                        <AvatarBadge initials={c.avatar_initials} size="lg" online={c.online} />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-[#e2e8f0] truncate">{c.display_name}</div>
+                          <div className="text-[11px] text-[#4a9eff] truncate">{c.department}</div>
+                        </div>
+                      </div>
+                      {c.position && <div className="text-[11px] text-[#4a5568] mb-1">{c.position}</div>}
+                      <div className="flex gap-1.5 mt-3">
+                        <button onClick={() => openChatWith(c.id)} className="flex-1 py-1.5 text-[10px] bg-[#1a2332] border border-[#2a3548] rounded-sm text-[#94a3b8] hover:border-[#4a9eff] hover:text-[#4a9eff] transition-colors flex items-center justify-center gap-1">
+                          <Icon name="MessageSquare" size={11} /> Чат
+                        </button>
+                        <button onClick={() => startCall(c, "audio")} className="flex-1 py-1.5 text-[10px] bg-[#1a2332] border border-[#2a3548] rounded-sm text-[#94a3b8] hover:border-[#22c55e] hover:text-[#22c55e] transition-colors flex items-center justify-center gap-1">
+                          <Icon name="Phone" size={11} /> Звонок
+                        </button>
+                        <button onClick={() => startCall(c, "video")} className="flex-1 py-1.5 text-[10px] bg-[#1a2332] border border-[#2a3548] rounded-sm text-[#94a3b8] hover:border-[#a78bfa] hover:text-[#a78bfa] transition-colors flex items-center justify-center gap-1">
+                          <Icon name="Video" size={11} /> Видео
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* CALLS */}
         {section === "calls" && (
           <div className="flex flex-1 overflow-hidden">
             <div className="w-80 flex flex-col border-r border-[#1a2332] bg-[#0a1120] flex-shrink-0">
-              <div className="px-4 pt-4 pb-3 border-b border-[#1a2332]">
-                <h2 className="text-xs font-semibold text-[#e2e8f0] tracking-widest uppercase mb-3">Звонки</h2>
+              <div className="px-4 pt-4 pb-3 border-b border-[#1a2332] flex items-center justify-between">
+                <h2 className="text-xs font-semibold text-[#e2e8f0] tracking-widest uppercase">Звонки</h2>
+                {loadingCalls && <div className="w-3 h-3 border border-[#4a9eff] border-t-transparent rounded-full animate-spin" />}
               </div>
               <div className="flex-1 overflow-y-auto">
-                {STATIC_CALLS.map(call => (
+                {callHistory.map(call => (
                   <div key={call.id} className="flex items-center gap-3 px-4 py-3 border-b border-[#0d1421] hover:bg-[#0e1627] cursor-pointer transition-colors">
                     <AvatarBadge initials={call.avatar} />
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-medium text-[#e2e8f0]">{call.name}</div>
                       <div className="flex items-center gap-1 mt-0.5">
-                        <Icon
-                          name={call.type === "incoming" ? "PhoneIncoming" : call.type === "outgoing" ? "PhoneOutgoing" : "PhoneMissed"}
-                          size={11}
-                          className={call.type === "missed" ? "text-[#f87171]" : call.type === "incoming" ? "text-[#22c55e]" : "text-[#4a9eff]"}
-                        />
+                        <Icon name={call.type === "incoming" ? "PhoneIncoming" : call.type === "outgoing" ? "PhoneOutgoing" : "PhoneMissed"} size={11}
+                          className={call.type === "missed" ? "text-[#f87171]" : call.type === "incoming" ? "text-[#22c55e]" : "text-[#4a9eff]"} />
                         <span className="text-[10px] text-[#4a5568]">{call.time}</span>
-                        {call.isVideo && <Icon name="Video" size={10} className="text-[#4a5568] ml-1" />}
+                        {call.is_video && <Icon name="Video" size={10} className="text-[#4a5568] ml-1" />}
                       </div>
                     </div>
                     <span className="text-[10px] font-mono text-[#4a5568]">{call.duration}</span>
                   </div>
                 ))}
+                {callHistory.length === 0 && !loadingCalls && (
+                  <div className="p-4 text-xs text-[#4a5568] text-center">История пуста</div>
+                )}
               </div>
             </div>
-            <div className="flex-1 flex items-center justify-center">
+            <div className="flex-1 flex flex-col items-center justify-center gap-6">
               <div className="text-center">
-                <div className="w-20 h-20 rounded-full bg-[#0a1120] border border-[#1a2332] flex items-center justify-center mx-auto mb-5">
+                <div className="w-20 h-20 rounded-full bg-[#0a1120] border border-[#1a2332] flex items-center justify-center mx-auto mb-4">
                   <Icon name="Phone" size={32} className="text-[#4a5568]" />
                 </div>
-                <p className="text-xs text-[#4a5568] mb-5">Начать новый звонок</p>
-                <button onClick={() => setActiveCall(true)} className="px-5 py-2 bg-[#22c55e] text-[#080f1a] text-xs font-medium rounded-sm hover:bg-[#16a34a] transition-colors">
-                  Новый звонок
+                <p className="text-sm font-medium text-[#e2e8f0] mb-1">Новый звонок</p>
+                <p className="text-xs text-[#4a5568] mb-5">Выберите контакт для звонка</p>
+                <div className="flex gap-2 justify-center">
+                  {contacts.slice(0, 4).map(c => (
+                    <button key={c.id} onClick={() => startCall(c, "audio")} className="flex flex-col items-center gap-1.5 p-2 rounded-sm hover:bg-[#1a2332] transition-colors">
+                      <AvatarBadge initials={c.avatar_initials} online={c.online} />
+                      <span className="text-[10px] text-[#94a3b8] max-w-[48px] truncate">{c.display_name.split(" ")[0]}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => { setSection("contacts"); }} className="px-4 py-2 bg-[#22c55e] text-[#080f1a] text-xs font-medium rounded-sm hover:bg-[#16a34a] transition-colors flex items-center gap-1.5">
+                  <Icon name="Phone" size={13} /> Аудиозвонок
+                </button>
+                <button onClick={() => { setSection("contacts"); }} className="px-4 py-2 bg-[#4a9eff] text-[#080f1a] text-xs font-medium rounded-sm hover:bg-[#3b8fe0] transition-colors flex items-center gap-1.5">
+                  <Icon name="Video" size={13} /> Видеозвонок
                 </button>
               </div>
             </div>
@@ -1236,21 +1499,53 @@ export default function App() {
 
         {/* VIDEO */}
         {section === "video" && (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center max-w-xs">
-              <div className="w-20 h-20 rounded-full bg-[#0a1120] border border-[#1a2332] flex items-center justify-center mx-auto mb-5">
-                <Icon name="Video" size={32} className="text-[#4a5568]" />
+          <div className="flex flex-1 overflow-hidden">
+            <div className="w-72 flex flex-col border-r border-[#1a2332] bg-[#0a1120] flex-shrink-0">
+              <div className="px-4 pt-4 pb-3 border-b border-[#1a2332]">
+                <h2 className="text-xs font-semibold text-[#e2e8f0] tracking-widest uppercase mb-3">Видеозвонок</h2>
+                <p className="text-[11px] text-[#4a5568]">Выберите контакт</p>
               </div>
-              <h3 className="text-sm font-semibold text-[#e2e8f0] mb-2">Видеозвонки</h3>
-              <p className="text-xs text-[#4a5568] mb-6 leading-relaxed">Защищённые видеоконференции до 50 участников с записью и демонстрацией экрана.</p>
-              <div className="flex gap-2 justify-center">
-                <button onClick={() => setActiveVideo(true)} className="px-4 py-2 bg-[#4a9eff] text-[#080f1a] text-xs font-medium rounded-sm hover:bg-[#3b8fe0] transition-colors flex items-center gap-1.5">
-                  <Icon name="Video" size={13} /> Начать
-                </button>
-                <button className="px-4 py-2 bg-[#1a2332] border border-[#2a3548] text-[#94a3b8] text-xs rounded-sm hover:border-[#4a9eff] transition-colors flex items-center gap-1.5">
-                  <Icon name="Users" size={13} /> Конференция
-                </button>
+              <div className="flex-1 overflow-y-auto">
+                {contacts.map(c => (
+                  <div key={c.id} className="flex items-center gap-3 px-4 py-3 border-b border-[#0d1421] hover:bg-[#0e1627] cursor-pointer transition-colors" onClick={() => startCall(c, "video")}>
+                    <AvatarBadge initials={c.avatar_initials} online={c.online} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-[#e2e8f0] truncate">{c.display_name}</div>
+                      <div className="text-[11px] text-[#4a5568] truncate">{c.department}</div>
+                    </div>
+                    <Icon name="Video" size={14} className="text-[#4a5568]" />
+                  </div>
+                ))}
               </div>
+            </div>
+            <div className="flex-1 flex flex-col items-center justify-center">
+              {activeVideo && remoteStream ? (
+                <div className="relative w-full h-full bg-black">
+                  <video autoPlay playsInline className="w-full h-full object-cover" ref={el => { if (el) el.srcObject = remoteStream; }} />
+                  {localStream && (
+                    <video autoPlay playsInline muted className="absolute bottom-4 right-4 w-32 h-24 object-cover rounded-sm border border-[#2a3548]" ref={el => { if (el) el.srcObject = localStream; }} />
+                  )}
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3">
+                    <button onClick={() => setMicMuted(v => !v)} className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${micMuted ? "bg-[#f87171]" : "bg-[#1a2332]"}`}>
+                      <Icon name={micMuted ? "MicOff" : "Mic"} size={18} className="text-white" />
+                    </button>
+                    <button onClick={endCall} className="w-11 h-11 rounded-full bg-[#f87171] flex items-center justify-center">
+                      <Icon name="PhoneOff" size={18} className="text-white" />
+                    </button>
+                    <button onClick={() => setCamOff(v => !v)} className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${camOff ? "bg-[#f87171]" : "bg-[#1a2332]"}`}>
+                      <Icon name={camOff ? "VideoOff" : "Video"} size={18} className="text-white" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center max-w-xs">
+                  <div className="w-20 h-20 rounded-full bg-[#0a1120] border border-[#1a2332] flex items-center justify-center mx-auto mb-4">
+                    <Icon name="Video" size={32} className="text-[#4a5568]" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-[#e2e8f0] mb-2">Видеозвонки</h3>
+                  <p className="text-xs text-[#4a5568]">Выберите контакт слева для начала видеозвонка</p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1387,61 +1682,84 @@ export default function App() {
         )}
       </div>
 
-      {/* Audio Call Modal */}
-      {activeCall && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-[#0a1120] border border-[#1a2332] rounded-sm p-8 w-64 text-center shadow-2xl">
-            <div className="w-14 h-14 rounded-full bg-[#1a2332] border border-[#2a3548] flex items-center justify-center text-[#4a9eff] font-medium mx-auto mb-4">
-              {activeChat?.avatar || "??"}
+      {/* Incoming Call */}
+      {incomingCall && !activeCall && (
+        <div className="fixed bottom-6 right-6 bg-[#0a1120] border border-[#22c55e] rounded-sm p-4 w-72 shadow-2xl z-50" style={{ animation: "fadeSlideIn 0.3s ease" }}>
+          <div className="flex items-center gap-3 mb-4">
+            <AvatarBadge initials={incomingCall.caller_avatar} />
+            <div>
+              <div className="text-sm font-medium text-[#e2e8f0]">{incomingCall.caller_name}</div>
+              <div className="text-xs text-[#22c55e] flex items-center gap-1">
+                <Icon name={incomingCall.call_type === "video" ? "Video" : "Phone"} size={11} />
+                Входящий {incomingCall.call_type === "video" ? "видео" : "аудио"}звонок
+              </div>
             </div>
-            <div className="text-sm font-medium text-[#e2e8f0] mb-1">{activeChat?.name || "Звонок"}</div>
-            <div className="text-xs text-[#22c55e] font-mono mb-6">Звонок...</div>
-            <div className="flex justify-center gap-3">
-              <button onClick={() => setMicMuted(!micMuted)} className={`w-11 h-11 rounded-full flex items-center justify-center border transition-all ${micMuted ? "bg-[#f87171] border-[#f87171] text-white" : "bg-[#1a2332] border-[#2a3548] text-[#94a3b8]"}`}>
-                <Icon name={micMuted ? "MicOff" : "Mic"} size={16} />
-              </button>
-              <button onClick={() => setActiveCall(false)} className="w-11 h-11 rounded-full bg-[#f87171] border border-[#f87171] text-white flex items-center justify-center hover:bg-[#ef4444] transition-colors">
-                <Icon name="PhoneOff" size={16} />
-              </button>
-              <button className="w-11 h-11 rounded-full bg-[#1a2332] border border-[#2a3548] text-[#94a3b8] flex items-center justify-center hover:border-[#4a9eff] transition-colors">
-                <Icon name="Volume2" size={16} />
-              </button>
-            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => answerCall(incomingCall)} className="flex-1 py-2 bg-[#22c55e] text-[#080f1a] text-xs font-medium rounded-sm flex items-center justify-center gap-1.5">
+              <Icon name="Phone" size={13} /> Принять
+            </button>
+            <button onClick={async () => {
+              await fetch(`${API.calls}/answer`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ call_id: incomingCall.id, accepted: false }) });
+              setIncomingCall(null);
+            }} className="flex-1 py-2 bg-[#f87171] text-white text-xs font-medium rounded-sm flex items-center justify-center gap-1.5">
+              <Icon name="PhoneOff" size={13} /> Отклонить
+            </button>
           </div>
         </div>
       )}
 
-      {/* Video Call Modal */}
-      {activeVideo && (
-        <div className="fixed inset-0 bg-[#050c18] flex flex-col z-50">
-          <div className="flex-1 relative flex items-center justify-center bg-[#0a1120]">
-            <div className="text-center">
-              <div className="w-20 h-20 rounded-full bg-[#1a2332] border border-[#2a3548] flex items-center justify-center text-[#4a9eff] text-2xl font-medium mx-auto mb-3">
-                {activeChat?.avatar || "??"}
+      {/* Active Call Modal */}
+      {activeCall && (
+        <div className={`fixed z-50 ${callType === "video" ? "inset-0 bg-[#050c18] flex flex-col" : "inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center"}`}>
+          {callType === "video" ? (
+            <>
+              <div className="flex-1 relative bg-[#0a1120]">
+                {remoteStream ? (
+                  <video autoPlay playsInline className="w-full h-full object-cover" ref={el => { if (el) el.srcObject = remoteStream; }} />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full">
+                    <AvatarBadge initials={callTarget?.avatar_initials || "??"} size="lg" />
+                    <div className="text-sm font-medium text-[#e2e8f0] mt-3">{callTarget?.display_name || "Звонок"}</div>
+                    <div className="text-xs text-[#22c55e] font-mono mt-1 animate-pulse">Соединяем...</div>
+                  </div>
+                )}
+                {localStream && (
+                  <video autoPlay playsInline muted className="absolute bottom-4 right-4 w-32 h-24 object-cover rounded-sm border border-[#2a3548]" ref={el => { if (el) el.srcObject = localStream; }} />
+                )}
+                <div className="absolute top-4 left-4 bg-black/50 rounded-sm px-3 py-1.5 text-xs text-[#e2e8f0] font-mono">{formatDuration(callDuration)}</div>
               </div>
-              <div className="text-sm text-[#4a5568]">Камера недоступна</div>
+              <div className="flex justify-center items-center gap-3 py-4 border-t border-[#1a2332] bg-[#0a1120]">
+                <button onClick={() => setMicMuted(v => !v)} className={`w-11 h-11 rounded-full flex items-center justify-center border transition-all ${micMuted ? "bg-[#f87171] border-[#f87171] text-white" : "bg-[#1a2332] border-[#2a3548] text-[#94a3b8]"}`}>
+                  <Icon name={micMuted ? "MicOff" : "Mic"} size={16} />
+                </button>
+                <button onClick={() => setCamOff(v => !v)} className={`w-11 h-11 rounded-full flex items-center justify-center border transition-all ${camOff ? "bg-[#f87171] border-[#f87171] text-white" : "bg-[#1a2332] border-[#2a3548] text-[#94a3b8]"}`}>
+                  <Icon name={camOff ? "VideoOff" : "Video"} size={16} />
+                </button>
+                <button onClick={endCall} className="w-12 h-12 rounded-full bg-[#f87171] border border-[#f87171] text-white flex items-center justify-center hover:bg-[#ef4444] transition-colors">
+                  <Icon name="PhoneOff" size={18} />
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="bg-[#0a1120] border border-[#1a2332] rounded-sm p-8 w-64 text-center shadow-2xl">
+              {remoteStream && <audio autoPlay ref={el => { if (el) el.srcObject = remoteStream; }} />}
+              <AvatarBadge initials={callTarget?.avatar_initials || activeChat?.avatar || "??"} size="lg" />
+              <div className="text-sm font-medium text-[#e2e8f0] mt-4 mb-1">{callTarget?.display_name || activeChat?.name || "Звонок"}</div>
+              <div className="text-xs text-[#22c55e] font-mono mb-6">{remoteStream ? formatDuration(callDuration) : "Соединяем..."}</div>
+              <div className="flex justify-center gap-3">
+                <button onClick={() => setMicMuted(v => !v)} className={`w-11 h-11 rounded-full flex items-center justify-center border transition-all ${micMuted ? "bg-[#f87171] border-[#f87171] text-white" : "bg-[#1a2332] border-[#2a3548] text-[#94a3b8]"}`}>
+                  <Icon name={micMuted ? "MicOff" : "Mic"} size={16} />
+                </button>
+                <button onClick={endCall} className="w-11 h-11 rounded-full bg-[#f87171] border border-[#f87171] text-white flex items-center justify-center hover:bg-[#ef4444] transition-colors">
+                  <Icon name="PhoneOff" size={16} />
+                </button>
+                <button className="w-11 h-11 rounded-full bg-[#1a2332] border border-[#2a3548] text-[#94a3b8] flex items-center justify-center">
+                  <Icon name="Volume2" size={16} />
+                </button>
+              </div>
             </div>
-            <div className="absolute bottom-4 right-4 w-32 h-24 bg-[#111827] border border-[#2a3548] rounded-sm flex items-center justify-center text-[#4a5568] text-xs">
-              {camOff ? <Icon name="VideoOff" size={20} /> : currentUser.avatar_initials}
-            </div>
-            <div className="absolute top-4 left-4 bg-black/50 rounded-sm px-3 py-1.5 text-xs text-[#e2e8f0]">
-              {activeChat?.name || "Видеозвонок"}
-            </div>
-          </div>
-          <div className="flex justify-center items-center gap-3 py-4 border-t border-[#1a2332] bg-[#0a1120]">
-            <button onClick={() => setMicMuted(!micMuted)} className={`w-11 h-11 rounded-full flex items-center justify-center border transition-all ${micMuted ? "bg-[#f87171] border-[#f87171] text-white" : "bg-[#1a2332] border-[#2a3548] text-[#94a3b8]"}`}>
-              <Icon name={micMuted ? "MicOff" : "Mic"} size={16} />
-            </button>
-            <button onClick={() => setCamOff(!camOff)} className={`w-11 h-11 rounded-full flex items-center justify-center border transition-all ${camOff ? "bg-[#f87171] border-[#f87171] text-white" : "bg-[#1a2332] border-[#2a3548] text-[#94a3b8]"}`}>
-              <Icon name={camOff ? "VideoOff" : "Video"} size={16} />
-            </button>
-            <button className="w-11 h-11 rounded-full bg-[#1a2332] border border-[#2a3548] text-[#94a3b8] flex items-center justify-center">
-              <Icon name="Monitor" size={16} />
-            </button>
-            <button onClick={() => setActiveVideo(false)} className="w-12 h-12 rounded-full bg-[#f87171] border border-[#f87171] text-white flex items-center justify-center hover:bg-[#ef4444] transition-colors">
-              <Icon name="PhoneOff" size={18} />
-            </button>
-          </div>
+          )}
         </div>
       )}
     </div>
