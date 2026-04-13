@@ -130,11 +130,11 @@ function FileIconComp({ type }: { type: "doc" | "img" | "archive" | "audio" | "v
 // ============ EMAIL AUTH SCREEN ============
 type AuthStep = "login" | "forgot" | "email_code" | "register" | "reset_password";
 
-const inputCls = "w-full bg-[#0d1421] border border-[#1a2332] rounded-sm px-4 py-3 text-sm text-[#e2e8f0] placeholder-[#2a3548] focus:outline-none focus:border-[#4a9eff] transition-colors";
-const inputWithIconCls = "w-full bg-[#0d1421] border border-[#1a2332] rounded-sm pl-9 pr-4 py-3 text-sm text-[#e2e8f0] placeholder-[#2a3548] focus:outline-none focus:border-[#4a9eff] transition-colors";
-const btnPrimary = "w-full py-3 bg-[#4a9eff] text-[#080f1a] text-sm font-semibold rounded-sm hover:bg-[#3b8fe0] transition-all disabled:opacity-30 disabled:cursor-not-allowed";
-const errBox = "flex items-center gap-2 text-[11px] text-[#f87171] bg-[#140a0a] border border-[#2a1010] rounded-sm px-3 py-2.5";
-const label = "block text-[10px] font-semibold text-[#4a5568] uppercase tracking-widest mb-2";
+const inputCls = "w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-sm text-white placeholder-white/40 focus:outline-none focus:border-white/60 focus:bg-white/15 transition-all backdrop-blur-sm";
+const inputWithIconCls = "w-full bg-white/10 border border-white/20 rounded-lg pl-9 pr-4 py-3 text-sm text-white placeholder-white/40 focus:outline-none focus:border-white/60 focus:bg-white/15 transition-all backdrop-blur-sm";
+const btnPrimary = "w-full py-3 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed relative overflow-hidden";
+const errBox = "flex items-center gap-2 text-[11px] text-red-200 bg-red-500/20 border border-red-400/30 rounded-lg px-3 py-2.5 backdrop-blur-sm";
+const label = "block text-[10px] font-semibold text-white/50 uppercase tracking-widest mb-2";
 
 function Spinner() {
   return <span className="w-4 h-4 border-2 border-[#080f1a]/30 border-t-[#080f1a] rounded-full animate-spin inline-block" />;
@@ -293,35 +293,48 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
   const codeComplete = code.every(d => d !== "");
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden" style={{ background: "#080f1a" }}>
+    <div className="flex h-screen w-screen overflow-hidden relative" style={{ background: "linear-gradient(135deg, #0a1628 0%, #0d1f3c 25%, #0a2448 50%, #0d1f3c 75%, #0a1628 100%)" }}>
+      {/* Переливающийся перламутровый фон */}
+      <div className="absolute inset-0 pointer-events-none" style={{ animation: "pearlShift 8s ease-in-out infinite" }} >
+        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 20% 50%, rgba(100,180,255,0.18) 0%, transparent 55%)", animation: "drift1 7s ease-in-out infinite alternate" }} />
+        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 80% 30%, rgba(160,120,255,0.14) 0%, transparent 50%)", animation: "drift2 9s ease-in-out infinite alternate" }} />
+        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 55% 80%, rgba(80,220,220,0.10) 0%, transparent 45%)", animation: "drift3 11s ease-in-out infinite alternate" }} />
+        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 40% 20%, rgba(180,140,255,0.08) 0%, transparent 40%)", animation: "drift1 13s ease-in-out infinite alternate-reverse" }} />
+      </div>
+      {/* Мерцающие частицы */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {[...Array(18)].map((_, i) => (
+          <div key={i} className="absolute rounded-full" style={{
+            width: `${2 + (i % 3)}px`, height: `${2 + (i % 3)}px`,
+            left: `${(i * 37 + 11) % 100}%`, top: `${(i * 53 + 7) % 100}%`,
+            background: i % 3 === 0 ? "rgba(160,200,255,0.6)" : i % 3 === 1 ? "rgba(180,150,255,0.5)" : "rgba(100,230,230,0.5)",
+            animation: `sparkle ${3 + (i % 4)}s ease-in-out ${(i * 0.4) % 3}s infinite`,
+          }} />
+        ))}
+      </div>
+
       {/* Left panel */}
-      <div className="hidden lg:flex w-[420px] flex-shrink-0 flex-col justify-between p-10 relative overflow-hidden border-r border-[#1a2332]">
-        <div className="absolute inset-0" style={{
-          background: "radial-gradient(ellipse at 30% 50%, rgba(74,158,255,0.06) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(34,197,94,0.04) 0%, transparent 50%)"
-        }} />
-        <div className="absolute inset-0 opacity-[0.03]" style={{
-          backgroundImage: "linear-gradient(#4a9eff 1px, transparent 1px), linear-gradient(90deg, #4a9eff 1px, transparent 1px)",
-          backgroundSize: "40px 40px"
-        }} />
+      <div className="hidden lg:flex w-[420px] flex-shrink-0 flex-col justify-between p-10 relative overflow-hidden" style={{ borderRight: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", backdropFilter: "blur(20px)" }}>
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(160deg, rgba(120,180,255,0.06) 0%, transparent 60%)" }} />
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-16">
-            <div className="w-9 h-9 rounded-sm bg-[#4a9eff] flex items-center justify-center">
-              <span className="text-[#080f1a] font-bold text-base">Д</span>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #5ab4ff, #a78bfa)", boxShadow: "0 0 20px rgba(90,180,255,0.4)" }}>
+              <span className="text-white font-bold text-base">Д</span>
             </div>
-            <span className="text-sm font-semibold text-[#e2e8f0] tracking-wide">Друг</span>
+            <span className="text-sm font-semibold text-white/90 tracking-wide">Друг</span>
           </div>
           <div>
-            <h1 className="text-3xl font-semibold text-[#e2e8f0] leading-snug mb-4">Корпоративный<br />мессенджер</h1>
-            <p className="text-sm text-[#4a5568] leading-relaxed">Безопасная связь для вашей команды. Чаты, звонки, файлы и боты в одном месте.</p>
+            <h1 className="text-3xl font-semibold leading-snug mb-4" style={{ background: "linear-gradient(135deg, #e0f0ff, #c4b5fd, #7dd3fc)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Корпоративный<br />мессенджер</h1>
+            <p className="text-sm text-white/40 leading-relaxed">Безопасная связь для вашей команды. Чаты, звонки, файлы и боты в одном месте.</p>
           </div>
         </div>
         <div className="relative z-10 space-y-3">
           {[{ icon: "Shield", text: "Сквозное шифрование" }, { icon: "Zap", text: "Мгновенная доставка" }, { icon: "Users", text: "До 10 000 пользователей" }].map(f => (
             <div key={f.text} className="flex items-center gap-3">
-              <div className="w-7 h-7 rounded-sm bg-[#1a2332] border border-[#2a3548] flex items-center justify-center">
-                <Icon name={f.icon} size={13} className="text-[#4a9eff]" />
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: "rgba(90,180,255,0.15)", border: "1px solid rgba(90,180,255,0.25)" }}>
+                <Icon name={f.icon} size={13} className="text-sky-300" />
               </div>
-              <span className="text-xs text-[#4a5568]">{f.text}</span>
+              <span className="text-xs text-white/50">{f.text}</span>
             </div>
           ))}
         </div>
@@ -331,57 +344,57 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
       <div className="flex-1 flex items-center justify-center px-8 overflow-y-auto py-10">
         <div className="w-full max-w-sm">
           <div className="lg:hidden flex items-center gap-3 mb-10">
-            <div className="w-9 h-9 rounded-sm bg-[#4a9eff] flex items-center justify-center">
-              <span className="text-[#080f1a] font-bold text-base">Д</span>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #5ab4ff, #a78bfa)" }}>
+              <span className="text-white font-bold text-base">Д</span>
             </div>
-            <span className="text-sm font-semibold text-[#e2e8f0]">Друг</span>
+            <span className="text-sm font-semibold text-white/90">Друг</span>
           </div>
 
           {/* STEP: LOGIN */}
           {step === "login" && (
             <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
-              <div className="mb-8">
-                <h2 className="text-xl font-semibold text-[#e2e8f0] mb-1.5">Вход</h2>
-                <p className="text-xs text-[#4a5568]">Введите никнейм и пароль</p>
-              </div>
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div>
-                  <label className={label}>Никнейм</label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="AtSign" size={15} className="text-[#4a5568]" /></div>
-                    <input type="text" value={username} onChange={e => { setUsername(e.target.value); clearErr(); }}
-                      placeholder="username" autoFocus autoComplete="username"
-                      className={inputWithIconCls} />
+              <div className="mb-8 p-6 rounded-2xl" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", backdropFilter: "blur(20px)" }}>
+                <h2 className="text-xl font-semibold text-white mb-1.5">Вход</h2>
+                <p className="text-xs text-white/40 mb-6">Введите никнейм и пароль</p>
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div>
+                    <label className={label}>Никнейм</label>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="AtSign" size={15} className="text-white/40" /></div>
+                      <input type="text" value={username} onChange={e => { setUsername(e.target.value); clearErr(); }}
+                        placeholder="username" autoFocus autoComplete="username"
+                        className={inputWithIconCls} />
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <label className={label}>Пароль</label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-[#4a5568]" /></div>
-                    <input type={showPass ? "text" : "password"} value={password}
-                      onChange={e => { setPassword(e.target.value); clearErr(); }}
-                      placeholder="••••••••" autoComplete="current-password"
-                      className={inputWithIconCls + " pr-10"} />
-                    <button type="button" onClick={() => setShowPass(v => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#4a5568] hover:text-[#94a3b8]">
-                      <Icon name={showPass ? "EyeOff" : "Eye"} size={15} />
-                    </button>
+                  <div>
+                    <label className={label}>Пароль</label>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-white/40" /></div>
+                      <input type={showPass ? "text" : "password"} value={password}
+                        onChange={e => { setPassword(e.target.value); clearErr(); }}
+                        placeholder="••••••••" autoComplete="current-password"
+                        className={inputWithIconCls + " pr-10"} />
+                      <button type="button" onClick={() => setShowPass(v => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70">
+                        <Icon name={showPass ? "EyeOff" : "Eye"} size={15} />
+                      </button>
+                    </div>
                   </div>
+                  {error && <div className={errBox}><Icon name="AlertCircle" size={12} />{error}</div>}
+                  <button type="submit" disabled={loading || !username.trim() || !password.trim()} className={btnPrimary} style={{ background: "linear-gradient(135deg, #5ab4ff, #a78bfa, #5ab4ff)", backgroundSize: "200% 100%", animation: loading ? "none" : "shimmer 3s linear infinite", boxShadow: "0 4px 20px rgba(90,180,255,0.3)" }}>
+                    {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Входим...</span> : "Войти →"}
+                  </button>
+                </form>
+                <div className="mt-5 flex justify-between items-center">
+                  <button onClick={() => { setStep("forgot"); clearErr(); setEmail(""); }}
+                    className="text-xs text-white/40 hover:text-white/70 transition-colors">
+                    Забыл пароль
+                  </button>
+                  <button onClick={() => { setStep("forgot"); clearErr(); setEmail(""); }}
+                    className="text-xs text-sky-300 hover:text-sky-200 transition-colors">
+                    Регистрация →
+                  </button>
                 </div>
-                {error && <div className={errBox}><Icon name="AlertCircle" size={12} />{error}</div>}
-                <button type="submit" disabled={loading || !username.trim() || !password.trim()} className={btnPrimary}>
-                  {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Входим...</span> : "Войти →"}
-                </button>
-              </form>
-              <div className="mt-6 flex justify-between items-center">
-                <button onClick={() => { setStep("forgot"); clearErr(); setEmail(""); }}
-                  className="text-xs text-[#4a5568] hover:text-[#94a3b8] transition-colors">
-                  Забыл пароль
-                </button>
-                <button onClick={() => { setStep("forgot"); clearErr(); setEmail(""); }}
-                  className="text-xs text-[#4a9eff] hover:text-[#7ab8ff] transition-colors">
-                  Регистрация →
-                </button>
               </div>
             </div>
           )}
@@ -389,61 +402,62 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
           {/* STEP: FORGOT / REGISTER start (email input) */}
           {step === "forgot" && (
             <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
-              <button onClick={() => { setStep("login"); clearErr(); }} className="flex items-center gap-1.5 text-xs text-[#4a5568] hover:text-[#94a3b8] mb-8 transition-colors">
+              <button onClick={() => { setStep("login"); clearErr(); }} className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 mb-6 transition-colors">
                 <Icon name="ArrowLeft" size={13} /> Назад
               </button>
-              <div className="mb-8">
-                <h2 className="text-xl font-semibold text-[#e2e8f0] mb-1.5">Email</h2>
-                <p className="text-xs text-[#4a5568]">Введите email — пришлём код для входа или регистрации</p>
-              </div>
-              <form onSubmit={handleSendCode} className="space-y-4">
-                <div>
-                  <label className={label}>Email</label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Mail" size={15} className="text-[#4a5568]" /></div>
-                    <input type="email" value={email} onChange={e => { setEmail(e.target.value); clearErr(); }}
-                      placeholder="you@company.ru" autoFocus autoComplete="email"
-                      className={inputWithIconCls} />
+              <div className="p-6 rounded-2xl" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", backdropFilter: "blur(20px)" }}>
+                <h2 className="text-xl font-semibold text-white mb-1.5">Email</h2>
+                <p className="text-xs text-white/40 mb-6">Введите email — пришлём код для входа или регистрации</p>
+                <form onSubmit={handleSendCode} className="space-y-4">
+                  <div>
+                    <label className={label}>Email</label>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Mail" size={15} className="text-white/40" /></div>
+                      <input type="email" value={email} onChange={e => { setEmail(e.target.value); clearErr(); }}
+                        placeholder="you@company.ru" autoFocus autoComplete="email"
+                        className={inputWithIconCls} />
+                    </div>
                   </div>
-                </div>
-                {error && <div className={errBox}><Icon name="AlertCircle" size={12} />{error}</div>}
-                <button type="submit" disabled={loading || !email.trim()} className={btnPrimary}>
-                  {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Отправляем...</span> : "Получить код →"}
-                </button>
-              </form>
+                  {error && <div className={errBox}><Icon name="AlertCircle" size={12} />{error}</div>}
+                  <button type="submit" disabled={loading || !email.trim()} className={btnPrimary} style={{ background: "linear-gradient(135deg, #5ab4ff, #a78bfa, #5ab4ff)", backgroundSize: "200% 100%", animation: loading ? "none" : "shimmer 3s linear infinite", boxShadow: "0 4px 20px rgba(90,180,255,0.3)" }}>
+                    {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Отправляем...</span> : "Получить код →"}
+                  </button>
+                </form>
+              </div>
             </div>
           )}
 
           {/* STEP: EMAIL CODE */}
           {step === "email_code" && (
             <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
-              <button onClick={() => { setStep("forgot"); setCode(["","","","","",""]); clearErr(); }} className="flex items-center gap-1.5 text-xs text-[#4a5568] hover:text-[#94a3b8] mb-8 transition-colors">
+              <button onClick={() => { setStep("forgot"); setCode(["","","","","",""]); clearErr(); }} className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 mb-6 transition-colors">
                 <Icon name="ArrowLeft" size={13} /> Назад
               </button>
-              <div className="mb-8">
-                <h2 className="text-xl font-semibold text-[#e2e8f0] mb-1.5">Код из письма</h2>
-                <p className="text-xs text-[#4a5568]">Отправили 6-значный код на <span className="text-[#94a3b8]">{email}</span></p>
-              </div>
-              <div className="flex gap-2 mb-6">
-                {code.map((digit, idx) => (
-                  <input key={idx} type="text" inputMode="numeric" maxLength={1} value={digit}
-                    ref={el => { codeRefs[idx] = el; }}
-                    onChange={e => handleCodeChange(idx, e.target.value, codeRefs)}
-                    onKeyDown={e => handleCodeKey(idx, e, codeRefs)}
-                    onFocus={e => e.target.select()}
-                    className={`w-10 h-10 text-center text-[20px] font-mono font-semibold bg-[#0d1421] border rounded-sm focus:outline-none transition-all ${digit ? "border-[#4a9eff] text-[#e2e8f0]" : "border-[#1a2332] text-[#4a5568]"} ${loading ? "opacity-50" : ""} focus:border-[#4a9eff]`}
-                    autoFocus={idx === 0} />
-                ))}
-              </div>
-              {error && <div className={errBox + " mb-4"}><Icon name="AlertCircle" size={12} />{error}</div>}
-              <button onClick={() => handleVerifyCode()} disabled={!codeComplete || loading} className={btnPrimary + " mb-4"}>
-                {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Проверяем...</span> : "Продолжить →"}
-              </button>
-              <div className="text-center">
-                {resendTimer > 0
-                  ? <span className="text-xs text-[#4a5568]">Повторная отправка через <span className="font-mono text-[#94a3b8]">{resendTimer}с</span></span>
-                  : <button onClick={() => handleSendCode()} className="text-xs text-[#4a9eff] hover:text-[#7ab8ff] transition-colors">Отправить код повторно</button>
-                }
+              <div className="p-6 rounded-2xl" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", backdropFilter: "blur(20px)" }}>
+                <h2 className="text-xl font-semibold text-white mb-1.5">Код из письма</h2>
+                <p className="text-xs text-white/40 mb-6">Отправили 6-значный код на <span className="text-sky-300">{email}</span></p>
+                <div className="flex gap-2 mb-6">
+                  {code.map((digit, idx) => (
+                    <input key={idx} type="text" inputMode="numeric" maxLength={1} value={digit}
+                      ref={el => { codeRefs[idx] = el; }}
+                      onChange={e => handleCodeChange(idx, e.target.value, codeRefs)}
+                      onKeyDown={e => handleCodeKey(idx, e, codeRefs)}
+                      onFocus={e => e.target.select()}
+                      className={`w-11 h-12 text-center text-xl font-mono font-semibold rounded-lg focus:outline-none transition-all backdrop-blur-sm ${digit ? "text-white" : "text-white/30"} ${loading ? "opacity-50" : ""}`}
+                      style={{ background: digit ? "rgba(90,180,255,0.2)" : "rgba(255,255,255,0.08)", border: digit ? "1px solid rgba(90,180,255,0.5)" : "1px solid rgba(255,255,255,0.15)" }}
+                      autoFocus={idx === 0} />
+                  ))}
+                </div>
+                {error && <div className={errBox + " mb-4"}><Icon name="AlertCircle" size={12} />{error}</div>}
+                <button onClick={() => handleVerifyCode()} disabled={!codeComplete || loading} className={btnPrimary + " mb-4"} style={{ background: "linear-gradient(135deg, #5ab4ff, #a78bfa, #5ab4ff)", backgroundSize: "200% 100%", animation: loading ? "none" : "shimmer 3s linear infinite", boxShadow: "0 4px 20px rgba(90,180,255,0.3)" }}>
+                  {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Проверяем...</span> : "Продолжить →"}
+                </button>
+                <div className="text-center">
+                  {resendTimer > 0
+                    ? <span className="text-xs text-white/30">Повторная отправка через <span className="font-mono text-white/60">{resendTimer}с</span></span>
+                    : <button onClick={() => handleSendCode()} className="text-xs text-sky-300 hover:text-sky-200 transition-colors">Отправить код повторно</button>
+                  }
+                </div>
               </div>
             </div>
           )}
@@ -451,105 +465,105 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
           {/* STEP: REGISTER */}
           {step === "register" && (
             <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
-              <div className="mb-8">
-                <h2 className="text-xl font-semibold text-[#e2e8f0] mb-1.5">Регистрация</h2>
-                <p className="text-xs text-[#4a5568]">Заполните данные для создания аккаунта</p>
+              <div className="p-6 rounded-2xl" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", backdropFilter: "blur(20px)" }}>
+                <h2 className="text-xl font-semibold text-white mb-1.5">Регистрация</h2>
+                <p className="text-xs text-white/40 mb-6">Заполните данные для создания аккаунта</p>
+                <form onSubmit={handleRegister} className="space-y-4">
+                  <div>
+                    <label className={label}>Имя и фамилия</label>
+                    <input value={displayName} onChange={e => { setDisplayName(e.target.value); clearErr(); }}
+                      placeholder="Иван Петров" autoFocus className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={label}>Никнейм</label>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="AtSign" size={15} className="text-white/40" /></div>
+                      <input value={newUsername} onChange={e => { setNewUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, "")); clearErr(); }}
+                        placeholder="ivan_petrov" autoComplete="username"
+                        className={inputWithIconCls} />
+                    </div>
+                    <p className="text-[10px] text-white/30 mt-1">3–30 символов: латиница, цифры, _</p>
+                  </div>
+                  <div>
+                    <label className={label}>Организация</label>
+                    <input value={organization} onChange={e => { setOrganization(e.target.value); clearErr(); }}
+                      placeholder="ООО Ромашка" className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={label}>Подразделение</label>
+                    <input value={department} onChange={e => { setDepartment(e.target.value); clearErr(); }}
+                      placeholder="Отдел разработки" className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={label}>Пароль</label>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-white/40" /></div>
+                      <input type={showPass ? "text" : "password"} value={newPassword}
+                        onChange={e => { setNewPassword(e.target.value); clearErr(); }}
+                        placeholder="Минимум 6 символов" autoComplete="new-password"
+                        className={inputWithIconCls + " pr-10"} />
+                      <button type="button" onClick={() => setShowPass(v => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70">
+                        <Icon name={showPass ? "EyeOff" : "Eye"} size={15} />
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className={label}>Повторите пароль</label>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-white/40" /></div>
+                      <input type={showPass ? "text" : "password"} value={newPassword2}
+                        onChange={e => { setNewPassword2(e.target.value); clearErr(); }}
+                        placeholder="••••••••" autoComplete="new-password"
+                        className={inputWithIconCls} />
+                    </div>
+                  </div>
+                  {error && <div className={errBox}><Icon name="AlertCircle" size={12} />{error}</div>}
+                  <button type="submit" disabled={loading || !displayName.trim() || !newUsername.trim() || newPassword.length < 6} className={btnPrimary} style={{ background: "linear-gradient(135deg, #5ab4ff, #a78bfa, #5ab4ff)", backgroundSize: "200% 100%", animation: loading ? "none" : "shimmer 3s linear infinite", boxShadow: "0 4px 20px rgba(90,180,255,0.3)" }}>
+                    {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Создаём аккаунт...</span> : "Создать аккаунт →"}
+                  </button>
+                </form>
               </div>
-              <form onSubmit={handleRegister} className="space-y-4">
-                <div>
-                  <label className={label}>Имя и фамилия</label>
-                  <input value={displayName} onChange={e => { setDisplayName(e.target.value); clearErr(); }}
-                    placeholder="Иван Петров" autoFocus className={inputCls} />
-                </div>
-                <div>
-                  <label className={label}>Никнейм</label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="AtSign" size={15} className="text-[#4a5568]" /></div>
-                    <input value={newUsername} onChange={e => { setNewUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, "")); clearErr(); }}
-                      placeholder="ivan_petrov" autoComplete="username"
-                      className={inputWithIconCls} />
-                  </div>
-                  <p className="text-[10px] text-[#4a5568] mt-1">3–30 символов: латиница, цифры, _</p>
-                </div>
-                <div>
-                  <label className={label}>Организация</label>
-                  <input value={organization} onChange={e => { setOrganization(e.target.value); clearErr(); }}
-                    placeholder="ООО Ромашка" className={inputCls} />
-                </div>
-                <div>
-                  <label className={label}>Подразделение</label>
-                  <input value={department} onChange={e => { setDepartment(e.target.value); clearErr(); }}
-                    placeholder="Отдел разработки" className={inputCls} />
-                </div>
-                <div>
-                  <label className={label}>Пароль</label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-[#4a5568]" /></div>
-                    <input type={showPass ? "text" : "password"} value={newPassword}
-                      onChange={e => { setNewPassword(e.target.value); clearErr(); }}
-                      placeholder="Минимум 6 символов" autoComplete="new-password"
-                      className={inputWithIconCls + " pr-10"} />
-                    <button type="button" onClick={() => setShowPass(v => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#4a5568] hover:text-[#94a3b8]">
-                      <Icon name={showPass ? "EyeOff" : "Eye"} size={15} />
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className={label}>Повторите пароль</label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-[#4a5568]" /></div>
-                    <input type={showPass ? "text" : "password"} value={newPassword2}
-                      onChange={e => { setNewPassword2(e.target.value); clearErr(); }}
-                      placeholder="••••••••" autoComplete="new-password"
-                      className={inputWithIconCls} />
-                  </div>
-                </div>
-                {error && <div className={errBox}><Icon name="AlertCircle" size={12} />{error}</div>}
-                <button type="submit" disabled={loading || !displayName.trim() || !newUsername.trim() || newPassword.length < 6} className={btnPrimary}>
-                  {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Создаём аккаунт...</span> : "Создать аккаунт →"}
-                </button>
-              </form>
             </div>
           )}
 
           {/* STEP: RESET PASSWORD */}
           {step === "reset_password" && (
             <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
-              <div className="mb-8">
-                <h2 className="text-xl font-semibold text-[#e2e8f0] mb-1.5">Новый пароль</h2>
-                <p className="text-xs text-[#4a5568]">Придумайте новый пароль для аккаунта</p>
+              <div className="p-6 rounded-2xl" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", backdropFilter: "blur(20px)" }}>
+                <h2 className="text-xl font-semibold text-white mb-1.5">Новый пароль</h2>
+                <p className="text-xs text-white/40 mb-6">Придумайте новый пароль для аккаунта</p>
+                <form onSubmit={handleReset} className="space-y-4">
+                  <div>
+                    <label className={label}>Новый пароль</label>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-white/40" /></div>
+                      <input type={showPass ? "text" : "password"} value={newPassword}
+                        onChange={e => { setNewPassword(e.target.value); clearErr(); }}
+                        placeholder="Минимум 6 символов" autoFocus autoComplete="new-password"
+                        className={inputWithIconCls + " pr-10"} />
+                      <button type="button" onClick={() => setShowPass(v => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70">
+                        <Icon name={showPass ? "EyeOff" : "Eye"} size={15} />
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className={label}>Повторите пароль</label>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-white/40" /></div>
+                      <input type={showPass ? "text" : "password"} value={newPassword2}
+                        onChange={e => { setNewPassword2(e.target.value); clearErr(); }}
+                        placeholder="••••••••" autoComplete="new-password"
+                        className={inputWithIconCls} />
+                    </div>
+                  </div>
+                  {error && <div className={errBox}><Icon name="AlertCircle" size={12} />{error}</div>}
+                  <button type="submit" disabled={loading || newPassword.length < 6} className={btnPrimary} style={{ background: "linear-gradient(135deg, #5ab4ff, #a78bfa, #5ab4ff)", backgroundSize: "200% 100%", animation: loading ? "none" : "shimmer 3s linear infinite", boxShadow: "0 4px 20px rgba(90,180,255,0.3)" }}>
+                    {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Сохраняем...</span> : "Сохранить пароль →"}
+                  </button>
+                </form>
               </div>
-              <form onSubmit={handleReset} className="space-y-4">
-                <div>
-                  <label className={label}>Новый пароль</label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-[#4a5568]" /></div>
-                    <input type={showPass ? "text" : "password"} value={newPassword}
-                      onChange={e => { setNewPassword(e.target.value); clearErr(); }}
-                      placeholder="Минимум 6 символов" autoFocus autoComplete="new-password"
-                      className={inputWithIconCls + " pr-10"} />
-                    <button type="button" onClick={() => setShowPass(v => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#4a5568] hover:text-[#94a3b8]">
-                      <Icon name={showPass ? "EyeOff" : "Eye"} size={15} />
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className={label}>Повторите пароль</label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-[#4a5568]" /></div>
-                    <input type={showPass ? "text" : "password"} value={newPassword2}
-                      onChange={e => { setNewPassword2(e.target.value); clearErr(); }}
-                      placeholder="••••••••" autoComplete="new-password"
-                      className={inputWithIconCls} />
-                  </div>
-                </div>
-                {error && <div className={errBox}><Icon name="AlertCircle" size={12} />{error}</div>}
-                <button type="submit" disabled={loading || newPassword.length < 6} className={btnPrimary}>
-                  {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Сохраняем...</span> : "Сохранить пароль →"}
-                </button>
-              </form>
             </div>
           )}
         </div>
@@ -557,8 +571,28 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
 
       <style>{`
         @keyframes fadeSlideIn {
-          from { opacity: 0; transform: translateY(12px); }
+          from { opacity: 0; transform: translateY(16px); }
           to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes drift1 {
+          from { transform: translate(0, 0) scale(1); }
+          to   { transform: translate(40px, -30px) scale(1.1); }
+        }
+        @keyframes drift2 {
+          from { transform: translate(0, 0) scale(1); }
+          to   { transform: translate(-50px, 40px) scale(1.15); }
+        }
+        @keyframes drift3 {
+          from { transform: translate(0, 0) scale(1); }
+          to   { transform: translate(30px, 50px) scale(1.08); }
+        }
+        @keyframes sparkle {
+          0%, 100% { opacity: 0; transform: scale(0.5); }
+          50%       { opacity: 1; transform: scale(1.2); }
+        }
+        @keyframes shimmer {
+          0%   { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
         }
       `}</style>
     </div>
