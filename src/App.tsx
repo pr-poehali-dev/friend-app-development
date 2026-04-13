@@ -17,6 +17,23 @@ export const THEMES: { id: ThemeId; name: string; accent: string; bg: string; pr
 const ThemeContext = createContext<{ theme: ThemeId; setTheme: (t: ThemeId) => void }>({ theme: "dark-blue", setTheme: () => {} });
 export const useTheme = () => useContext(ThemeContext);
 
+const CHAT_PATTERNS: Record<string, { image: string; size: string }> = {
+  none:     { image: "none", size: "auto" },
+  dots:     { image: "radial-gradient(circle, var(--t-border-md) 1px, transparent 1px)", size: "16px 16px" },
+  lines:    { image: "repeating-linear-gradient(0deg, transparent, transparent 18px, var(--t-border) 18px, var(--t-border) 19px)", size: "100% 19px" },
+  grid:     { image: "linear-gradient(var(--t-border) 1px, transparent 1px), linear-gradient(90deg, var(--t-border) 1px, transparent 1px)", size: "20px 20px" },
+  diamonds: { image: "repeating-linear-gradient(45deg, transparent, transparent 10px, var(--t-border) 10px, var(--t-border) 11px), repeating-linear-gradient(-45deg, transparent, transparent 10px, var(--t-border) 10px, var(--t-border) 11px)", size: "14px 14px" },
+  circles:  { image: "radial-gradient(circle at 50% 50%, transparent 8px, var(--t-border) 8px, var(--t-border) 9px, transparent 9px)", size: "18px 18px" },
+  waves:    { image: "repeating-linear-gradient(-45deg, transparent, transparent 6px, var(--t-border) 6px, var(--t-border) 7px)", size: "8px 8px" },
+  stars:    { image: "radial-gradient(circle, var(--t-accent) 1px, transparent 1px), radial-gradient(circle, var(--t-border-md) 0.5px, transparent 0.5px)", size: "24px 24px, 12px 12px" },
+};
+
+function applyPattern(patternId: string) {
+  const p = CHAT_PATTERNS[patternId] || CHAT_PATTERNS.none;
+  document.documentElement.style.setProperty("--t-chat-pattern", p.image);
+  document.documentElement.style.setProperty("--t-chat-pattern-size", p.size);
+}
+
 function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<ThemeId>(() => (localStorage.getItem("app_theme") as ThemeId) || "dark-blue");
   const setTheme = (t: ThemeId) => {
@@ -24,7 +41,10 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("app_theme", t);
     document.body.setAttribute("data-theme", t);
   };
-  useEffect(() => { document.body.setAttribute("data-theme", theme); }, [theme]);
+  useEffect(() => {
+    document.body.setAttribute("data-theme", theme);
+    applyPattern(localStorage.getItem("chat_pattern") || "none");
+  }, [theme]);
   return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>;
 }
 
@@ -179,11 +199,35 @@ function FileIconComp({ type }: { type: "doc" | "img" | "archive" | "audio" | "v
 // ============ EMAIL AUTH SCREEN ============
 type AuthStep = "login" | "forgot" | "email_code" | "register" | "reset_password";
 
-const inputCls = "w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-sm text-white placeholder-white/40 focus:outline-none focus:border-white/60 focus:bg-white/15 transition-all backdrop-blur-sm";
-const inputWithIconCls = "w-full bg-white/10 border border-white/20 rounded-lg pl-9 pr-4 py-3 text-sm text-white placeholder-white/40 focus:outline-none focus:border-white/60 focus:bg-white/15 transition-all backdrop-blur-sm";
-const btnPrimary = "w-full py-3 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed relative overflow-hidden";
-const errBox = "flex items-center gap-2 text-[11px] text-red-200 bg-red-500/20 border border-red-400/30 rounded-lg px-3 py-2.5 backdrop-blur-sm";
-const label = "block text-[10px] font-semibold text-white/50 uppercase tracking-widest mb-2";
+const FORM_CARD: React.CSSProperties = {
+  background: "linear-gradient(160deg, #0d0600 0%, #1a0a02 50%, #0a0300 100%)",
+  border: "1px solid rgba(255,100,20,0.25)",
+  borderRadius: 20,
+  boxShadow: "0 0 40px rgba(255,80,0,0.25), 0 0 80px rgba(255,40,0,0.12), 0 30px 60px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,160,60,0.15), inset 0 -1px 0 rgba(255,40,0,0.1)",
+  transform: "perspective(900px) rotateX(2deg) translateY(0)",
+  backdropFilter: "blur(20px)",
+  padding: "28px 28px 24px",
+  position: "relative" as const,
+};
+const inputCls = "w-full rounded-xl px-4 py-3 text-sm text-white/90 placeholder-white/20 focus:outline-none transition-all";
+const inputWithIconCls = "w-full rounded-xl pl-10 pr-4 py-3 text-sm text-white/90 placeholder-white/20 focus:outline-none transition-all";
+const INPUT_STYLE: React.CSSProperties = { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,100,20,0.2)", boxShadow: "inset 0 2px 8px rgba(0,0,0,0.4)" };
+const INPUT_FOCUS_STYLE: React.CSSProperties = { border: "1px solid rgba(255,160,50,0.5)", boxShadow: "inset 0 2px 8px rgba(0,0,0,0.4), 0 0 12px rgba(255,120,0,0.2)" };
+const BTN_STYLE: React.CSSProperties = {
+  width: "100%", padding: "13px", borderRadius: 12, fontFamily: "'Rajdhani', sans-serif",
+  fontWeight: 700, fontSize: 15, letterSpacing: "0.08em", color: "#fff", cursor: "pointer",
+  background: "linear-gradient(135deg, #cc4400 0%, #ff6600 40%, #ff9900 70%, #cc4400 100%)",
+  backgroundSize: "200% 100%",
+  border: "none",
+  boxShadow: "0 4px 0 #7a2200, 0 8px 20px rgba(255,80,0,0.4), 0 0 30px rgba(255,100,0,0.2), inset 0 1px 0 rgba(255,200,100,0.3)",
+  transform: "perspective(200px) rotateX(6deg) translateY(0px)",
+  transition: "all 0.15s ease",
+  position: "relative" as const,
+};
+const errBox = "flex items-center gap-2 text-[11px] text-red-300 rounded-xl px-3 py-2.5";
+const label = "block text-[10px] font-semibold uppercase tracking-widest mb-2";
+const LABEL_STYLE: React.CSSProperties = { fontFamily:"'Rajdhani', sans-serif", color:"rgba(255,160,60,0.7)", letterSpacing:"0.15em" };
+const ICON_STYLE: React.CSSProperties = { color: "rgba(255,120,40,0.7)", filter: "drop-shadow(0 0 4px rgba(255,100,0,0.5))" };
 
 function Spinner() {
   return <span className="w-4 h-4 border-2 border-[#080f1a]/30 border-t-[#080f1a] rounded-full animate-spin inline-block" />;
@@ -341,135 +385,200 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
 
   const codeComplete = code.every(d => d !== "");
 
+  // Звёзды — генерируем один раз
+  const stars = Array.from({ length: 200 }, (_, i) => ({
+    x: (i * 137.508 + 31) % 100,
+    y: (i * 97.3 + 17) % 100,
+    size: 0.5 + (i % 5) * 0.4,
+    dur: 2 + (i % 6),
+    delay: (i * 0.23) % 5,
+    bright: i % 7 === 0,
+  }));
+
   return (
-    <div className="flex h-screen w-screen overflow-hidden relative" style={{ background: "linear-gradient(135deg, #0a1628 0%, #0d1f3c 25%, #0a2448 50%, #0d1f3c 75%, #0a1628 100%)" }}>
-      {/* Переливающийся перламутровый фон */}
-      <div className="absolute inset-0 pointer-events-none" style={{ animation: "pearlShift 8s ease-in-out infinite" }} >
-        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 20% 50%, rgba(100,180,255,0.18) 0%, transparent 55%)", animation: "drift1 7s ease-in-out infinite alternate" }} />
-        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 80% 30%, rgba(160,120,255,0.14) 0%, transparent 50%)", animation: "drift2 9s ease-in-out infinite alternate" }} />
-        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 55% 80%, rgba(80,220,220,0.10) 0%, transparent 45%)", animation: "drift3 11s ease-in-out infinite alternate" }} />
-        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 40% 20%, rgba(180,140,255,0.08) 0%, transparent 40%)", animation: "drift1 13s ease-in-out infinite alternate-reverse" }} />
-      </div>
-      {/* Мерцающие частицы */}
+    <div className="flex h-screen w-screen overflow-hidden relative" style={{ background: "#000000", fontFamily: "'Space Grotesk', sans-serif" }}>
+
+      {/* ── ЗВЁЗДНОЕ НЕБО ── */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {[...Array(18)].map((_, i) => (
+        {stars.map((s, i) => (
           <div key={i} className="absolute rounded-full" style={{
-            width: `${2 + (i % 3)}px`, height: `${2 + (i % 3)}px`,
-            left: `${(i * 37 + 11) % 100}%`, top: `${(i * 53 + 7) % 100}%`,
-            background: i % 3 === 0 ? "rgba(160,200,255,0.6)" : i % 3 === 1 ? "rgba(180,150,255,0.5)" : "rgba(100,230,230,0.5)",
-            animation: `sparkle ${3 + (i % 4)}s ease-in-out ${(i * 0.4) % 3}s infinite`,
+            left: `${s.x}%`, top: `${s.y}%`,
+            width: `${s.size}px`, height: `${s.size}px`,
+            background: s.bright ? "#fff" : `rgba(255,255,255,${0.4 + (i % 4) * 0.15})`,
+            boxShadow: s.bright ? `0 0 ${s.size * 3}px ${s.size}px rgba(255,220,180,0.8)` : "none",
+            animation: `starBlink ${s.dur}s ease-in-out ${s.delay}s infinite`,
+          }} />
+        ))}
+        {/* Редкие яркие звёзды со вспышками */}
+        {Array.from({ length: 12 }, (_, i) => (
+          <div key={`bright-${i}`} className="absolute" style={{
+            left: `${(i * 83 + 5) % 100}%`, top: `${(i * 61 + 13) % 100}%`,
+            width: "3px", height: "3px",
+            background: "#fff",
+            borderRadius: "50%",
+            boxShadow: "0 0 6px 2px rgba(255,200,100,0.9), 0 0 12px 4px rgba(255,100,50,0.5)",
+            animation: `starFlare ${4 + i % 5}s ease-in-out ${i * 0.7}s infinite`,
           }} />
         ))}
       </div>
 
-      {/* Left panel */}
-      <div className="hidden lg:flex w-[420px] flex-shrink-0 flex-col justify-between p-10 relative overflow-hidden" style={{ borderRight: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", backdropFilter: "blur(20px)" }}>
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(160deg, rgba(120,180,255,0.06) 0%, transparent 60%)" }} />
+      {/* ── ТУМАННОСТИ ── */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse at 15% 40%, rgba(80,0,160,0.12) 0%, transparent 50%)", animation:"nebDrift 20s ease-in-out infinite alternate" }} />
+        <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse at 85% 60%, rgba(160,0,80,0.10) 0%, transparent 45%)", animation:"nebDrift 15s ease-in-out 3s infinite alternate-reverse" }} />
+        <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse at 50% 90%, rgba(20,0,100,0.15) 0%, transparent 40%)", animation:"nebDrift 25s ease-in-out 6s infinite alternate" }} />
+      </div>
+
+      {/* ── ЛЕВАЯ ПАНЕЛЬ — красивый текст в 3D ── */}
+      <div className="hidden lg:flex w-[440px] flex-shrink-0 flex-col justify-between p-12 relative overflow-hidden z-10" style={{ borderRight: "1px solid rgba(255,100,30,0.15)" }}>
         <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-16">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #5ab4ff, #a78bfa)", boxShadow: "0 0 20px rgba(90,180,255,0.4)" }}>
-              <span className="text-white font-bold text-base">Д</span>
+          {/* Лого */}
+          <div className="flex items-center gap-4 mb-14">
+            <div className="relative w-14 h-14 flex items-center justify-center" style={{
+              background: "linear-gradient(145deg, #1a0a00, #2d1200)",
+              borderRadius: "14px",
+              border: "1px solid rgba(255,120,30,0.5)",
+              boxShadow: "0 0 20px rgba(255,80,0,0.5), 0 0 60px rgba(255,40,0,0.2), inset 0 1px 0 rgba(255,160,80,0.3)",
+              transform: "perspective(200px) rotateX(5deg)",
+            }}>
+              <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 22, fontWeight: 900, background: "linear-gradient(135deg, #ff8c00, #ff3300, #ffcc00)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", textShadow: "none", filter: "drop-shadow(0 0 8px rgba(255,100,0,0.8))" }}>Д</span>
+              <div style={{ position:"absolute", inset:0, borderRadius:"14px", background:"linear-gradient(135deg, rgba(255,120,0,0.1) 0%, transparent 60%)" }} />
             </div>
-            <span className="text-sm font-semibold text-white/90 tracking-wide">Друг</span>
+            <div>
+              <div style={{ fontFamily:"'Orbitron', sans-serif", fontSize:18, fontWeight:900, letterSpacing:"0.15em", background:"linear-gradient(135deg, #ff8c00, #ffcc00)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", filter:"drop-shadow(0 0 8px rgba(255,150,0,0.6))" }}>ДРУГ</div>
+              <div style={{ fontFamily:"'Rajdhani', sans-serif", fontSize:11, color:"rgba(255,150,50,0.6)", letterSpacing:"0.2em", marginTop:2 }}>MESSENGER</div>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-semibold leading-snug mb-4" style={{ background: "linear-gradient(135deg, #e0f0ff, #c4b5fd, #7dd3fc)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Корпоративный<br />мессенджер</h1>
-            <p className="text-sm text-white/40 leading-relaxed">Безопасная связь для вашей команды. Чаты, звонки, файлы и боты в одном месте.</p>
+
+          {/* Заголовок 3D */}
+          <div style={{ perspective: "600px", marginBottom: 32 }}>
+            <h1 style={{
+              fontFamily: "'Orbitron', sans-serif",
+              fontSize: 38,
+              fontWeight: 900,
+              lineHeight: 1.15,
+              letterSpacing: "0.02em",
+              background: "linear-gradient(135deg, #ffcc00 0%, #ff8c00 35%, #ff3300 65%, #ff8c00 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              filter: "drop-shadow(0 4px 12px rgba(255,100,0,0.7)) drop-shadow(0 0 30px rgba(255,60,0,0.4))",
+              transform: "perspective(400px) rotateX(4deg)",
+              transformOrigin: "50% 100%",
+              textShadow: "none",
+            }}>
+              КОРПОРАТИВНЫЙ<br />МЕССЕНДЖЕР
+            </h1>
           </div>
+
+          <p style={{ fontFamily:"'Space Grotesk', sans-serif", fontSize:13, color:"rgba(255,180,100,0.55)", lineHeight:1.7, letterSpacing:"0.03em" }}>
+            Безопасная связь для вашей команды.<br />Чаты, звонки, файлы и боты в одном месте.
+          </p>
         </div>
-        <div className="relative z-10 space-y-3">
-          {[{ icon: "Shield", text: "Сквозное шифрование" }, { icon: "Zap", text: "Мгновенная доставка" }, { icon: "Users", text: "До 10 000 пользователей" }].map(f => (
-            <div key={f.text} className="flex items-center gap-3">
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: "rgba(90,180,255,0.15)", border: "1px solid rgba(90,180,255,0.25)" }}>
-                <Icon name={f.icon} size={13} className="text-sky-300" />
+
+        {/* Фичи */}
+        <div className="relative z-10 space-y-4">
+          {[
+            { icon: "Shield", text: "Сквозное шифрование", sub: "End-to-end" },
+            { icon: "Zap", text: "Мгновенная доставка", sub: "Real-time" },
+            { icon: "Users", text: "До 10 000 пользователей", sub: "Enterprise" },
+          ].map((f, i) => (
+            <div key={f.text} className="flex items-center gap-4" style={{ animation: `featureIn 0.6s ease ${0.2 + i * 0.15}s both` }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                background: "linear-gradient(145deg, #1a0800, #2d1500)",
+                border: "1px solid rgba(255,100,20,0.35)",
+                boxShadow: "0 0 12px rgba(255,80,0,0.3), inset 0 1px 0 rgba(255,160,60,0.2)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                animation: `iconPulse ${3 + i}s ease-in-out ${i * 0.5}s infinite`,
+              }}>
+                <Icon name={f.icon} size={16} style={{ color: "#ff9030", filter: "drop-shadow(0 0 6px rgba(255,120,0,0.8))" }} />
               </div>
-              <span className="text-xs text-white/50">{f.text}</span>
+              <div>
+                <div style={{ fontFamily:"'Rajdhani', sans-serif", fontWeight:600, fontSize:13, color:"rgba(255,200,120,0.9)", letterSpacing:"0.05em" }}>{f.text}</div>
+                <div style={{ fontFamily:"'Space Grotesk', sans-serif", fontSize:10, color:"rgba(255,120,40,0.45)", letterSpacing:"0.15em" }}>{f.sub}</div>
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Right — form */}
-      <div className="flex-1 flex items-center justify-center px-8 overflow-y-auto py-10">
-        <div className="w-full max-w-sm">
-          <div className="lg:hidden flex items-center gap-3 mb-10">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #5ab4ff, #a78bfa)" }}>
-              <span className="text-white font-bold text-base">Д</span>
+      {/* ── ПРАВАЯ ЧАСТЬ — форма ── */}
+      <div className="flex-1 flex items-center justify-center px-6 overflow-y-auto py-8 z-10 relative">
+        <div className="w-full max-w-[400px]">
+
+          {/* Мобильное лого */}
+          <div className="lg:hidden flex items-center gap-3 mb-8">
+            <div style={{ width:42, height:42, borderRadius:12, background:"linear-gradient(145deg,#1a0a00,#2d1200)", border:"1px solid rgba(255,120,30,0.5)", boxShadow:"0 0 16px rgba(255,80,0,0.4)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <span style={{ fontFamily:"'Orbitron',sans-serif", fontSize:18, fontWeight:900, background:"linear-gradient(135deg,#ff8c00,#ff3300,#ffcc00)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>Д</span>
             </div>
-            <span className="text-sm font-semibold text-white/90">Друг</span>
+            <span style={{ fontFamily:"'Orbitron',sans-serif", fontSize:14, fontWeight:900, letterSpacing:"0.12em", background:"linear-gradient(135deg,#ff8c00,#ffcc00)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>ДРУГ</span>
           </div>
 
           {/* STEP: LOGIN */}
           {step === "login" && (
-            <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
-              <div className="mb-8 p-6 rounded-2xl" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", backdropFilter: "blur(20px)" }}>
-                <h2 className="text-xl font-semibold text-white mb-1.5">Вход</h2>
-                <p className="text-xs text-white/40 mb-6">Введите никнейм и пароль</p>
+            <div style={{ animation: "fadeSlideIn 0.4s cubic-bezier(0.22,1,0.36,1)" }}>
+              <div style={FORM_CARD}>
+                <div style={{ position:"absolute", inset:0, borderRadius:20, background:"linear-gradient(135deg, rgba(255,120,30,0.08) 0%, transparent 50%)", pointerEvents:"none" }} />
+                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:22, fontWeight:900, letterSpacing:"0.04em", background:"linear-gradient(135deg,#ffcc00,#ff6600)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", marginBottom:4 }}>ВХОД</h2>
+                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,160,60,0.5)", marginBottom:24, letterSpacing:"0.04em" }}>Введите никнейм и пароль</p>
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div>
-                    <label className={label}>Никнейм</label>
+                    <label className={label} style={LABEL_STYLE}>Никнейм</label>
                     <div className="relative">
-                      <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="AtSign" size={15} className="text-white/40" /></div>
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2" style={{ animation:"iconPulse 3s ease-in-out infinite" }}><Icon name="AtSign" size={15} style={ICON_STYLE} /></div>
                       <input type="text" value={username} onChange={e => { setUsername(e.target.value); clearErr(); }}
                         placeholder="username" autoFocus autoComplete="username"
-                        className={inputWithIconCls} />
+                        className={inputWithIconCls} style={INPUT_STYLE} onFocus={e => Object.assign(e.target.style, INPUT_FOCUS_STYLE)} onBlur={e => Object.assign(e.target.style, INPUT_STYLE)} />
                     </div>
                   </div>
                   <div>
-                    <label className={label}>Пароль</label>
+                    <label className={label} style={LABEL_STYLE}>Пароль</label>
                     <div className="relative">
-                      <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-white/40" /></div>
-                      <input type={showPass ? "text" : "password"} value={password}
-                        onChange={e => { setPassword(e.target.value); clearErr(); }}
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2" style={{ animation:"iconPulse 4s ease-in-out infinite" }}><Icon name="Lock" size={15} style={ICON_STYLE} /></div>
+                      <input type={showPass ? "text" : "password"} value={password} onChange={e => { setPassword(e.target.value); clearErr(); }}
                         placeholder="••••••••" autoComplete="current-password"
-                        className={inputWithIconCls + " pr-10"} />
-                      <button type="button" onClick={() => setShowPass(v => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70">
+                        className={inputWithIconCls + " pr-10"} style={INPUT_STYLE} onFocus={e => Object.assign(e.target.style, INPUT_FOCUS_STYLE)} onBlur={e => Object.assign(e.target.style, INPUT_STYLE)} />
+                      <button type="button" onClick={() => setShowPass(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color:"rgba(255,120,40,0.6)" }}>
                         <Icon name={showPass ? "EyeOff" : "Eye"} size={15} />
                       </button>
                     </div>
                   </div>
-                  {error && <div className={errBox}><Icon name="AlertCircle" size={12} />{error}</div>}
-                  <button type="submit" disabled={loading || !username.trim() || !password.trim()} className={btnPrimary} style={{ background: "linear-gradient(135deg, #5ab4ff, #a78bfa, #5ab4ff)", backgroundSize: "200% 100%", animation: loading ? "none" : "shimmer 3s linear infinite", boxShadow: "0 4px 20px rgba(90,180,255,0.3)" }}>
-                    {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Входим...</span> : "Войти →"}
+                  {error && <div className={errBox} style={{ background:"rgba(255,50,0,0.15)", border:"1px solid rgba(255,80,0,0.3)" }}><Icon name="AlertCircle" size={12} />{error}</div>}
+                  <button type="submit" disabled={loading || !username.trim() || !password.trim()} style={{ ...BTN_STYLE, backgroundSize:"200%", animation: loading ? "none" : "btnShimmer 3s linear infinite", opacity: (loading || !username.trim() || !password.trim()) ? 0.4 : 1 }}>
+                    {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Входим...</span> : "ВОЙТИ →"}
                   </button>
                 </form>
                 <div className="mt-5 flex justify-between items-center">
-                  <button onClick={() => { setStep("forgot"); clearErr(); setEmail(""); }}
-                    className="text-xs text-white/40 hover:text-white/70 transition-colors">
-                    Забыл пароль
-                  </button>
-                  <button onClick={() => { setStep("forgot"); clearErr(); setEmail(""); }}
-                    className="text-xs text-sky-300 hover:text-sky-200 transition-colors">
-                    Регистрация →
-                  </button>
+                  <button onClick={() => { setStep("forgot"); clearErr(); setEmail(""); }} style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,120,40,0.5)", background:"none", border:"none", cursor:"pointer" }}>Забыл пароль</button>
+                  <button onClick={() => { setStep("forgot"); clearErr(); setEmail(""); }} style={{ fontFamily:"'Rajdhani',sans-serif", fontWeight:600, fontSize:13, color:"rgba(255,180,60,0.9)", background:"none", border:"none", cursor:"pointer", letterSpacing:"0.05em" }}>РЕГИСТРАЦИЯ →</button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* STEP: FORGOT / REGISTER start (email input) */}
+          {/* STEP: FORGOT */}
           {step === "forgot" && (
-            <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
-              <button onClick={() => { setStep("login"); clearErr(); }} className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 mb-6 transition-colors">
-                <Icon name="ArrowLeft" size={13} /> Назад
+            <div style={{ animation: "fadeSlideIn 0.4s cubic-bezier(0.22,1,0.36,1)" }}>
+              <button onClick={() => { setStep("login"); clearErr(); }} className="flex items-center gap-1.5 mb-5 transition-colors" style={{ fontFamily:"'Rajdhani',sans-serif", fontSize:13, color:"rgba(255,120,40,0.6)", background:"none", border:"none", cursor:"pointer", letterSpacing:"0.05em" }}>
+                <Icon name="ArrowLeft" size={13} /> НАЗАД
               </button>
-              <div className="p-6 rounded-2xl" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", backdropFilter: "blur(20px)" }}>
-                <h2 className="text-xl font-semibold text-white mb-1.5">Email</h2>
-                <p className="text-xs text-white/40 mb-6">Введите email — пришлём код для входа или регистрации</p>
+              <div style={FORM_CARD}>
+                <div style={{ position:"absolute", inset:0, borderRadius:20, background:"linear-gradient(135deg, rgba(255,120,30,0.08) 0%, transparent 50%)", pointerEvents:"none" }} />
+                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:22, fontWeight:900, letterSpacing:"0.04em", background:"linear-gradient(135deg,#ffcc00,#ff6600)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", marginBottom:4 }}>EMAIL</h2>
+                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,160,60,0.5)", marginBottom:24 }}>Введите email — пришлём код</p>
                 <form onSubmit={handleSendCode} className="space-y-4">
                   <div>
-                    <label className={label}>Email</label>
+                    <label className={label} style={LABEL_STYLE}>Email</label>
                     <div className="relative">
-                      <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Mail" size={15} className="text-white/40" /></div>
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2" style={{ animation:"iconPulse 3s ease-in-out infinite" }}><Icon name="Mail" size={15} style={ICON_STYLE} /></div>
                       <input type="email" value={email} onChange={e => { setEmail(e.target.value); clearErr(); }}
                         placeholder="you@company.ru" autoFocus autoComplete="email"
-                        className={inputWithIconCls} />
+                        className={inputWithIconCls} style={INPUT_STYLE} onFocus={e => Object.assign(e.target.style, INPUT_FOCUS_STYLE)} onBlur={e => Object.assign(e.target.style, INPUT_STYLE)} />
                     </div>
                   </div>
-                  {error && <div className={errBox}><Icon name="AlertCircle" size={12} />{error}</div>}
-                  <button type="submit" disabled={loading || !email.trim()} className={btnPrimary} style={{ background: "linear-gradient(135deg, #5ab4ff, #a78bfa, #5ab4ff)", backgroundSize: "200% 100%", animation: loading ? "none" : "shimmer 3s linear infinite", boxShadow: "0 4px 20px rgba(90,180,255,0.3)" }}>
-                    {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Отправляем...</span> : "Получить код →"}
+                  {error && <div className={errBox} style={{ background:"rgba(255,50,0,0.15)", border:"1px solid rgba(255,80,0,0.3)" }}><Icon name="AlertCircle" size={12} />{error}</div>}
+                  <button type="submit" disabled={loading || !email.trim()} style={{ ...BTN_STYLE, backgroundSize:"200%", animation: loading ? "none" : "btnShimmer 3s linear infinite", opacity: (loading || !email.trim()) ? 0.4 : 1 }}>
+                    {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Отправляем...</span> : "ПОЛУЧИТЬ КОД →"}
                   </button>
                 </form>
               </div>
@@ -478,13 +587,14 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
 
           {/* STEP: EMAIL CODE */}
           {step === "email_code" && (
-            <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
-              <button onClick={() => { setStep("forgot"); setCode(["","","","","",""]); clearErr(); }} className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 mb-6 transition-colors">
-                <Icon name="ArrowLeft" size={13} /> Назад
+            <div style={{ animation: "fadeSlideIn 0.4s cubic-bezier(0.22,1,0.36,1)" }}>
+              <button onClick={() => { setStep("forgot"); setCode(["","","","","",""]); clearErr(); }} className="flex items-center gap-1.5 mb-5" style={{ fontFamily:"'Rajdhani',sans-serif", fontSize:13, color:"rgba(255,120,40,0.6)", background:"none", border:"none", cursor:"pointer", letterSpacing:"0.05em" }}>
+                <Icon name="ArrowLeft" size={13} /> НАЗАД
               </button>
-              <div className="p-6 rounded-2xl" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", backdropFilter: "blur(20px)" }}>
-                <h2 className="text-xl font-semibold text-white mb-1.5">Код из письма</h2>
-                <p className="text-xs text-white/40 mb-6">Отправили 6-значный код на <span className="text-sky-300">{email}</span></p>
+              <div style={FORM_CARD}>
+                <div style={{ position:"absolute", inset:0, borderRadius:20, background:"linear-gradient(135deg, rgba(255,120,30,0.08) 0%, transparent 50%)", pointerEvents:"none" }} />
+                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:22, fontWeight:900, letterSpacing:"0.04em", background:"linear-gradient(135deg,#ffcc00,#ff6600)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", marginBottom:4 }}>КОД</h2>
+                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,160,60,0.5)", marginBottom:24 }}>6-значный код на <span style={{ color:"rgba(255,200,80,0.8)" }}>{email}</span></p>
                 <div className="flex gap-2 mb-6">
                   {code.map((digit, idx) => (
                     <input key={idx} type="text" inputMode="numeric" maxLength={1} value={digit}
@@ -492,19 +602,19 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
                       onChange={e => handleCodeChange(idx, e.target.value, codeRefs)}
                       onKeyDown={e => handleCodeKey(idx, e, codeRefs)}
                       onFocus={e => e.target.select()}
-                      className={`w-11 h-12 text-center text-xl font-mono font-semibold rounded-lg focus:outline-none transition-all backdrop-blur-sm ${digit ? "text-white" : "text-white/30"} ${loading ? "opacity-50" : ""}`}
-                      style={{ background: digit ? "rgba(90,180,255,0.2)" : "rgba(255,255,255,0.08)", border: digit ? "1px solid rgba(90,180,255,0.5)" : "1px solid rgba(255,255,255,0.15)" }}
+                      className={`w-11 h-12 text-center text-xl font-mono font-semibold rounded-xl focus:outline-none transition-all ${loading ? "opacity-50" : ""}`}
+                      style={{ fontFamily:"'Orbitron',sans-serif", background: digit ? "rgba(255,120,0,0.2)" : "rgba(255,255,255,0.04)", border: digit ? "1px solid rgba(255,160,30,0.6)" : "1px solid rgba(255,100,20,0.2)", color: digit ? "#ffcc00" : "rgba(255,255,255,0.2)", boxShadow: digit ? "0 0 12px rgba(255,120,0,0.3), inset 0 2px 4px rgba(0,0,0,0.3)" : "inset 0 2px 4px rgba(0,0,0,0.3)" }}
                       autoFocus={idx === 0} />
                   ))}
                 </div>
-                {error && <div className={errBox + " mb-4"}><Icon name="AlertCircle" size={12} />{error}</div>}
-                <button onClick={() => handleVerifyCode()} disabled={!codeComplete || loading} className={btnPrimary + " mb-4"} style={{ background: "linear-gradient(135deg, #5ab4ff, #a78bfa, #5ab4ff)", backgroundSize: "200% 100%", animation: loading ? "none" : "shimmer 3s linear infinite", boxShadow: "0 4px 20px rgba(90,180,255,0.3)" }}>
-                  {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Проверяем...</span> : "Продолжить →"}
+                {error && <div className={errBox + " mb-4"} style={{ background:"rgba(255,50,0,0.15)", border:"1px solid rgba(255,80,0,0.3)" }}><Icon name="AlertCircle" size={12} />{error}</div>}
+                <button onClick={() => handleVerifyCode()} disabled={!codeComplete || loading} style={{ ...BTN_STYLE, backgroundSize:"200%", animation: loading ? "none" : "btnShimmer 3s linear infinite", opacity: (!codeComplete || loading) ? 0.4 : 1, marginBottom:16 }}>
+                  {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Проверяем...</span> : "ПРОДОЛЖИТЬ →"}
                 </button>
                 <div className="text-center">
                   {resendTimer > 0
-                    ? <span className="text-xs text-white/30">Повторная отправка через <span className="font-mono text-white/60">{resendTimer}с</span></span>
-                    : <button onClick={() => handleSendCode()} className="text-xs text-sky-300 hover:text-sky-200 transition-colors">Отправить код повторно</button>
+                    ? <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,120,40,0.4)" }}>Повтор через <span style={{ color:"rgba(255,180,60,0.7)" }}>{resendTimer}с</span></span>
+                    : <button onClick={() => handleSendCode()} style={{ fontFamily:"'Rajdhani',sans-serif", fontSize:13, color:"rgba(255,180,60,0.8)", background:"none", border:"none", cursor:"pointer", letterSpacing:"0.05em" }}>ОТПРАВИТЬ СНОВА</button>
                   }
                 </div>
               </div>
@@ -513,63 +623,51 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
 
           {/* STEP: REGISTER */}
           {step === "register" && (
-            <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
-              <div className="p-6 rounded-2xl" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", backdropFilter: "blur(20px)" }}>
-                <h2 className="text-xl font-semibold text-white mb-1.5">Регистрация</h2>
-                <p className="text-xs text-white/40 mb-6">Заполните данные для создания аккаунта</p>
-                <form onSubmit={handleRegister} className="space-y-4">
-                  <div>
-                    <label className={label}>Имя и фамилия</label>
-                    <input value={displayName} onChange={e => { setDisplayName(e.target.value); clearErr(); }}
-                      placeholder="Иван Петров" autoFocus className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={label}>Никнейм</label>
-                    <div className="relative">
-                      <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="AtSign" size={15} className="text-white/40" /></div>
-                      <input value={newUsername} onChange={e => { setNewUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, "")); clearErr(); }}
-                        placeholder="ivan_petrov" autoComplete="username"
-                        className={inputWithIconCls} />
+            <div style={{ animation: "fadeSlideIn 0.4s cubic-bezier(0.22,1,0.36,1)" }}>
+              <div style={FORM_CARD}>
+                <div style={{ position:"absolute", inset:0, borderRadius:20, background:"linear-gradient(135deg, rgba(255,120,30,0.08) 0%, transparent 50%)", pointerEvents:"none" }} />
+                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:20, fontWeight:900, letterSpacing:"0.04em", background:"linear-gradient(135deg,#ffcc00,#ff6600)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", marginBottom:4 }}>РЕГИСТРАЦИЯ</h2>
+                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,160,60,0.5)", marginBottom:20 }}>Создайте аккаунт</p>
+                <form onSubmit={handleRegister} className="space-y-3">
+                  {[
+                    { label:"Имя и фамилия", val:displayName, set:(v:string)=>{setDisplayName(v);clearErr();}, ph:"Иван Петров", icon:null, af:true },
+                    { label:"Организация", val:organization, set:(v:string)=>{setOrganization(v);clearErr();}, ph:"ООО Ромашка", icon:null, af:false },
+                    { label:"Подразделение", val:department, set:(v:string)=>{setDepartment(v);clearErr();}, ph:"Отдел разработки", icon:null, af:false },
+                  ].map(f => (
+                    <div key={f.label}>
+                      <label className={label} style={LABEL_STYLE}>{f.label}</label>
+                      <input value={f.val} onChange={e=>f.set(e.target.value)} placeholder={f.ph} autoFocus={f.af}
+                        className={inputCls} style={INPUT_STYLE} onFocus={e=>Object.assign(e.target.style,INPUT_FOCUS_STYLE)} onBlur={e=>Object.assign(e.target.style,INPUT_STYLE)} />
                     </div>
-                    <p className="text-[10px] text-white/30 mt-1">3–30 символов: латиница, цифры, _</p>
-                  </div>
+                  ))}
                   <div>
-                    <label className={label}>Организация</label>
-                    <input value={organization} onChange={e => { setOrganization(e.target.value); clearErr(); }}
-                      placeholder="ООО Ромашка" className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={label}>Подразделение</label>
-                    <input value={department} onChange={e => { setDepartment(e.target.value); clearErr(); }}
-                      placeholder="Отдел разработки" className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={label}>Пароль</label>
+                    <label className={label} style={LABEL_STYLE}>Никнейм</label>
                     <div className="relative">
-                      <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-white/40" /></div>
-                      <input type={showPass ? "text" : "password"} value={newPassword}
-                        onChange={e => { setNewPassword(e.target.value); clearErr(); }}
-                        placeholder="Минимум 6 символов" autoComplete="new-password"
-                        className={inputWithIconCls + " pr-10"} />
-                      <button type="button" onClick={() => setShowPass(v => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70">
-                        <Icon name={showPass ? "EyeOff" : "Eye"} size={15} />
-                      </button>
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2" style={{animation:"iconPulse 3s ease-in-out infinite"}}><Icon name="AtSign" size={15} style={ICON_STYLE} /></div>
+                      <input value={newUsername} onChange={e=>{setNewUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g,""));clearErr();}}
+                        placeholder="ivan_petrov" autoComplete="username" className={inputWithIconCls}
+                        style={INPUT_STYLE} onFocus={e=>Object.assign(e.target.style,INPUT_FOCUS_STYLE)} onBlur={e=>Object.assign(e.target.style,INPUT_STYLE)} />
                     </div>
+                    <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:10, color:"rgba(255,120,40,0.35)", marginTop:4 }}>3–30 символов: латиница, цифры, _</p>
                   </div>
-                  <div>
-                    <label className={label}>Повторите пароль</label>
-                    <div className="relative">
-                      <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-white/40" /></div>
-                      <input type={showPass ? "text" : "password"} value={newPassword2}
-                        onChange={e => { setNewPassword2(e.target.value); clearErr(); }}
-                        placeholder="••••••••" autoComplete="new-password"
-                        className={inputWithIconCls} />
+                  {[
+                    { label:"Пароль", val:newPassword, set:(v:string)=>{setNewPassword(v);clearErr();}, ph:"Минимум 6 символов", ac:"new-password" },
+                    { label:"Повторите пароль", val:newPassword2, set:(v:string)=>{setNewPassword2(v);clearErr();}, ph:"••••••••", ac:"new-password" },
+                  ].map((f,fi) => (
+                    <div key={f.label}>
+                      <label className={label} style={LABEL_STYLE}>{f.label}</label>
+                      <div className="relative">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2" style={{animation:`iconPulse ${3+fi}s ease-in-out infinite`}}><Icon name="Lock" size={15} style={ICON_STYLE} /></div>
+                        <input type={showPass?"text":"password"} value={f.val} onChange={e=>f.set(e.target.value)}
+                          placeholder={f.ph} autoComplete={f.ac} className={inputWithIconCls+(fi===0?" pr-10":"")}
+                          style={INPUT_STYLE} onFocus={e=>Object.assign(e.target.style,INPUT_FOCUS_STYLE)} onBlur={e=>Object.assign(e.target.style,INPUT_STYLE)} />
+                        {fi===0 && <button type="button" onClick={()=>setShowPass(v=>!v)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{color:"rgba(255,120,40,0.6)"}}><Icon name={showPass?"EyeOff":"Eye"} size={15}/></button>}
+                      </div>
                     </div>
-                  </div>
-                  {error && <div className={errBox}><Icon name="AlertCircle" size={12} />{error}</div>}
-                  <button type="submit" disabled={loading || !displayName.trim() || !newUsername.trim() || newPassword.length < 6} className={btnPrimary} style={{ background: "linear-gradient(135deg, #5ab4ff, #a78bfa, #5ab4ff)", backgroundSize: "200% 100%", animation: loading ? "none" : "shimmer 3s linear infinite", boxShadow: "0 4px 20px rgba(90,180,255,0.3)" }}>
-                    {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Создаём аккаунт...</span> : "Создать аккаунт →"}
+                  ))}
+                  {error && <div className={errBox} style={{background:"rgba(255,50,0,0.15)",border:"1px solid rgba(255,80,0,0.3)"}}><Icon name="AlertCircle" size={12}/>{error}</div>}
+                  <button type="submit" disabled={loading||!displayName.trim()||!newUsername.trim()||newPassword.length<6} style={{...BTN_STYLE,backgroundSize:"200%",animation:loading?"none":"btnShimmer 3s linear infinite",opacity:(loading||!displayName.trim()||!newUsername.trim()||newPassword.length<6)?0.4:1}}>
+                    {loading?<span className="flex items-center justify-center gap-2"><Spinner/>Создаём...</span>:"СОЗДАТЬ АККАУНТ →"}
                   </button>
                 </form>
               </div>
@@ -578,38 +676,31 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
 
           {/* STEP: RESET PASSWORD */}
           {step === "reset_password" && (
-            <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
-              <div className="p-6 rounded-2xl" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", backdropFilter: "blur(20px)" }}>
-                <h2 className="text-xl font-semibold text-white mb-1.5">Новый пароль</h2>
-                <p className="text-xs text-white/40 mb-6">Придумайте новый пароль для аккаунта</p>
+            <div style={{ animation: "fadeSlideIn 0.4s cubic-bezier(0.22,1,0.36,1)" }}>
+              <div style={FORM_CARD}>
+                <div style={{ position:"absolute", inset:0, borderRadius:20, background:"linear-gradient(135deg, rgba(255,120,30,0.08) 0%, transparent 50%)", pointerEvents:"none" }} />
+                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:20, fontWeight:900, letterSpacing:"0.04em", background:"linear-gradient(135deg,#ffcc00,#ff6600)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", marginBottom:4 }}>НОВЫЙ ПАРОЛЬ</h2>
+                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,160,60,0.5)", marginBottom:24 }}>Придумайте надёжный пароль</p>
                 <form onSubmit={handleReset} className="space-y-4">
-                  <div>
-                    <label className={label}>Новый пароль</label>
-                    <div className="relative">
-                      <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-white/40" /></div>
-                      <input type={showPass ? "text" : "password"} value={newPassword}
-                        onChange={e => { setNewPassword(e.target.value); clearErr(); }}
-                        placeholder="Минимум 6 символов" autoFocus autoComplete="new-password"
-                        className={inputWithIconCls + " pr-10"} />
-                      <button type="button" onClick={() => setShowPass(v => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70">
-                        <Icon name={showPass ? "EyeOff" : "Eye"} size={15} />
-                      </button>
+                  {[
+                    { label:"Новый пароль", val:newPassword, set:(v:string)=>{setNewPassword(v);clearErr();}, ph:"Минимум 6 символов", af:true },
+                    { label:"Повторите пароль", val:newPassword2, set:(v:string)=>{setNewPassword2(v);clearErr();}, ph:"••••••••", af:false },
+                  ].map((f,fi) => (
+                    <div key={f.label}>
+                      <label className={label} style={LABEL_STYLE}>{f.label}</label>
+                      <div className="relative">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} style={ICON_STYLE}/></div>
+                        <input type={showPass?"text":"password"} value={f.val} onChange={e=>f.set(e.target.value)}
+                          placeholder={f.ph} autoFocus={f.af} autoComplete="new-password"
+                          className={inputWithIconCls+(fi===0?" pr-10":"")}
+                          style={INPUT_STYLE} onFocus={e=>Object.assign(e.target.style,INPUT_FOCUS_STYLE)} onBlur={e=>Object.assign(e.target.style,INPUT_STYLE)} />
+                        {fi===0 && <button type="button" onClick={()=>setShowPass(v=>!v)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{color:"rgba(255,120,40,0.6)"}}><Icon name={showPass?"EyeOff":"Eye"} size={15}/></button>}
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <label className={label}>Повторите пароль</label>
-                    <div className="relative">
-                      <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Lock" size={15} className="text-white/40" /></div>
-                      <input type={showPass ? "text" : "password"} value={newPassword2}
-                        onChange={e => { setNewPassword2(e.target.value); clearErr(); }}
-                        placeholder="••••••••" autoComplete="new-password"
-                        className={inputWithIconCls} />
-                    </div>
-                  </div>
-                  {error && <div className={errBox}><Icon name="AlertCircle" size={12} />{error}</div>}
-                  <button type="submit" disabled={loading || newPassword.length < 6} className={btnPrimary} style={{ background: "linear-gradient(135deg, #5ab4ff, #a78bfa, #5ab4ff)", backgroundSize: "200% 100%", animation: loading ? "none" : "shimmer 3s linear infinite", boxShadow: "0 4px 20px rgba(90,180,255,0.3)" }}>
-                    {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Сохраняем...</span> : "Сохранить пароль →"}
+                  ))}
+                  {error && <div className={errBox} style={{background:"rgba(255,50,0,0.15)",border:"1px solid rgba(255,80,0,0.3)"}}><Icon name="AlertCircle" size={12}/>{error}</div>}
+                  <button type="submit" disabled={loading||newPassword.length<6} style={{...BTN_STYLE,backgroundSize:"200%",animation:loading?"none":"btnShimmer 3s linear infinite",opacity:(loading||newPassword.length<6)?0.4:1}}>
+                    {loading?<span className="flex items-center justify-center gap-2"><Spinner/>Сохраняем...</span>:"СОХРАНИТЬ ПАРОЛЬ →"}
                   </button>
                 </form>
               </div>
@@ -619,27 +710,33 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
       </div>
 
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
         @keyframes fadeSlideIn {
-          from { opacity: 0; transform: translateY(16px); }
-          to   { opacity: 1; transform: translateY(0); }
+          from { opacity: 0; transform: perspective(600px) rotateX(8deg) translateY(24px) scale(0.97); }
+          to   { opacity: 1; transform: perspective(600px) rotateX(2deg) translateY(0) scale(1); }
         }
-        @keyframes drift1 {
-          from { transform: translate(0, 0) scale(1); }
-          to   { transform: translate(40px, -30px) scale(1.1); }
+        @keyframes starBlink {
+          0%,100% { opacity: 0.2; transform: scale(1); }
+          50%      { opacity: 1;   transform: scale(1.4); }
         }
-        @keyframes drift2 {
-          from { transform: translate(0, 0) scale(1); }
-          to   { transform: translate(-50px, 40px) scale(1.15); }
+        @keyframes starFlare {
+          0%,100% { opacity:0.3; transform:scale(1); box-shadow:0 0 4px 1px rgba(255,200,100,0.6); }
+          50%     { opacity:1;   transform:scale(1.6); box-shadow:0 0 12px 4px rgba(255,100,50,1), 0 0 24px 8px rgba(255,200,50,0.4); }
         }
-        @keyframes drift3 {
-          from { transform: translate(0, 0) scale(1); }
-          to   { transform: translate(30px, 50px) scale(1.08); }
+        @keyframes nebDrift {
+          from { transform: translate(0,0) scale(1); }
+          to   { transform: translate(30px,20px) scale(1.1); }
         }
-        @keyframes sparkle {
-          0%, 100% { opacity: 0; transform: scale(0.5); }
-          50%       { opacity: 1; transform: scale(1.2); }
+        @keyframes iconPulse {
+          0%,100% { filter: drop-shadow(0 0 4px rgba(255,100,0,0.5)); }
+          50%     { filter: drop-shadow(0 0 10px rgba(255,160,0,0.9)); }
         }
-        @keyframes shimmer {
+        @keyframes featureIn {
+          from { opacity:0; transform: translateX(-20px); }
+          to   { opacity:1; transform: translateX(0); }
+        }
+        @keyframes btnShimmer {
           0%   { background-position: 200% 0; }
           100% { background-position: -200% 0; }
         }
@@ -661,6 +758,7 @@ function SettingsPanel({
   onLogout: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<"profile" | "appearance">("profile");
+  const [chatPattern, setChatPattern] = useState<string>(() => localStorage.getItem("chat_pattern") || "none");
   const { theme, setTheme } = useTheme();
   const [displayName, setDisplayName] = useState(currentUser.display_name);
   const [position, setPosition] = useState(currentUser.position || "");
@@ -817,12 +915,61 @@ function SettingsPanel({
             })}
           </div>
 
+          {/* ── ОБОИ ЧАТА ── */}
+          <h3 className="text-xs font-semibold uppercase tracking-widest mb-3 mt-6" style={{ color: "var(--t-text-dim)" }}>Обои чата</h3>
+          <div className="grid grid-cols-4 gap-3 mb-6">
+            {[
+              { id: "none",     label: "Без обоев",  bg: "var(--t-chat-bg)", pattern: "none",   preview: "solid" },
+              { id: "dots",     label: "Точки",      bg: "var(--t-chat-bg)", pattern: "dots",   preview: "dots" },
+              { id: "lines",    label: "Линии",      bg: "var(--t-chat-bg)", pattern: "lines",  preview: "lines" },
+              { id: "grid",     label: "Сетка",      bg: "var(--t-chat-bg)", pattern: "grid",   preview: "grid" },
+              { id: "diamonds", label: "Ромбы",      bg: "var(--t-chat-bg)", pattern: "diamonds", preview: "diamonds" },
+              { id: "circles",  label: "Круги",      bg: "var(--t-chat-bg)", pattern: "circles", preview: "circles" },
+              { id: "waves",    label: "Волны",      bg: "var(--t-chat-bg)", pattern: "waves",  preview: "waves" },
+              { id: "stars",    label: "Звёзды",     bg: "var(--t-chat-bg)", pattern: "stars",  preview: "stars" },
+            ].map(p => {
+              const isActive = chatPattern === p.id;
+              const patternStyles: Record<string, string> = {
+                none:     "none",
+                dots:     `radial-gradient(circle, var(--t-border-md) 1px, transparent 1px)`,
+                lines:    `repeating-linear-gradient(0deg, transparent, transparent 18px, var(--t-border) 18px, var(--t-border) 19px)`,
+                grid:     `linear-gradient(var(--t-border) 1px, transparent 1px), linear-gradient(90deg, var(--t-border) 1px, transparent 1px)`,
+                diamonds: `repeating-linear-gradient(45deg, transparent, transparent 10px, var(--t-border) 10px, var(--t-border) 11px), repeating-linear-gradient(-45deg, transparent, transparent 10px, var(--t-border) 10px, var(--t-border) 11px)`,
+                circles:  `radial-gradient(circle at 50% 50%, transparent 8px, var(--t-border) 8px, var(--t-border) 9px, transparent 9px)`,
+                waves:    `repeating-linear-gradient(-45deg, transparent, transparent 6px, var(--t-border) 6px, var(--t-border) 7px)`,
+                stars:    `radial-gradient(circle, var(--t-accent) 1px, transparent 1px), radial-gradient(circle, var(--t-border-md) 0.5px, transparent 0.5px)`,
+              };
+              const sizes: Record<string, string> = {
+                dots: "16px 16px", lines: "100% 19px", grid: "20px 20px",
+                diamonds: "14px 14px", circles: "18px 18px", waves: "8px 8px", stars: "24px 24px, 12px 12px",
+              };
+              return (
+                <button key={p.id} onClick={() => {
+                  localStorage.setItem("chat_pattern", p.id);
+                  applyPattern(p.id);
+                  setChatPattern(p.id);
+                }} className="relative rounded-lg overflow-hidden transition-all" style={{
+                  height: 60, border: `2px solid ${chatPattern === p.id ? "var(--t-accent)" : "var(--t-border)"}`,
+                  boxShadow: chatPattern === p.id ? "0 0 0 1px var(--t-accent)" : "none",
+                  background: "var(--t-chat-bg)",
+                  backgroundImage: patternStyles[p.id],
+                  backgroundSize: sizes[p.id] || "auto",
+                }}>
+                  <div className="absolute inset-0 flex flex-col items-center justify-end pb-1.5" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 60%)" }}>
+                    <span className="text-[9px] font-medium" style={{ color: isActive ? "var(--t-accent)" : "rgba(255,255,255,0.7)" }}>{p.label}</span>
+                  </div>
+                  {isActive && <div className="absolute top-1.5 right-1.5 w-3.5 h-3.5 rounded-full flex items-center justify-center" style={{ background: "var(--t-accent)" }}><Icon name="Check" size={8} className="text-white" /></div>}
+                </button>
+              );
+            })}
+          </div>
+
           <div className="rounded-xl p-4" style={{ background: "var(--t-bg-main)", border: "1px solid var(--t-border)" }}>
             <div className="flex items-center gap-2 mb-1">
               <Icon name="Info" size={13} className="text-[var(--t-accent)]" />
               <span className="text-xs font-medium" style={{ color: "var(--t-text)" }}>Тема применяется мгновенно</span>
             </div>
-            <p className="text-xs" style={{ color: "var(--t-text-dim)" }}>Выбор сохраняется в браузере и применяется при следующем входе.</p>
+            <p className="text-xs" style={{ color: "var(--t-text-dim)" }}>Выбор сохраняется в браузере.</p>
           </div>
         </div>
       )}
@@ -1432,7 +1579,7 @@ function AppInner() {
                     </div>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3" style={{ background: "var(--t-chat-bg)", backgroundImage: "var(--t-chat-pattern)" }}>
+                  <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3" style={{ background: "var(--t-chat-bg)", backgroundImage: "var(--t-chat-pattern)", backgroundSize: "var(--t-chat-pattern-size, auto)" }}>
                     <div className="flex items-center gap-3 mb-2">
                       <div className="flex-1 h-px" style={{ background: "var(--t-border)" }} />
                       <span className="text-[10px] font-mono" style={{ color: "var(--t-text-dim)" }}>
