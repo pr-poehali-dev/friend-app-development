@@ -6,76 +6,51 @@
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
-
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
-
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-
     --primary: 222.2 47.4% 11.2%;
     --primary-foreground: 210 40% 98%;
-
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
-
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
-
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
-
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
-
     --radius: 0.5rem;
-
     --sidebar-background: 0 0% 98%;
-
     --sidebar-foreground: 240 5.3% 26.1%;
-
     --sidebar-primary: 240 5.9% 10%;
-
     --sidebar-primary-foreground: 0 0% 98%;
-
     --sidebar-accent: 240 4.8% 95.9%;
-
     --sidebar-accent-foreground: 240 5.9% 10%;
-
     --sidebar-border: 220 13% 91%;
-
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
-
     --card: 222.2 84% 4.9%;
     --card-foreground: 210 40% 98%;
-
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
-
     --primary: 210 40% 98%;
     --primary-foreground: 222.2 47.4% 11.2%;
-
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
-
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
-
     --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
-
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
@@ -94,8 +69,190 @@
   * {
     @apply border-border;
   }
-
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* ===== ТЕМЫ МЕССЕНДЖЕРА ===== */
+
+/* Переменные темы — используются во всём приложении */
+:root {
+  --t-bg-deep: #080f1a;
+  --t-bg-main: #0a1120;
+  --t-bg-panel: #0d1421;
+  --t-bg-hover: #0e1627;
+  --t-bg-active: #111827;
+  --t-bg-card: #111827;
+  --t-border: #1a2332;
+  --t-border-md: #2a3548;
+  --t-accent: #4a9eff;
+  --t-accent-2: #3b8fe0;
+  --t-text: #e2e8f0;
+  --t-text-muted: #94a3b8;
+  --t-text-dim: #4a5568;
+  --t-placeholder: #2a3548;
+  --t-online: #22c55e;
+  --t-danger: #f87171;
+  --t-msg-own-bg: #1a3a5c;
+  --t-msg-own-br: #2a4a6c;
+  --t-nav-width: 56px;
+
+  /* Фон чата */
+  --t-chat-bg: #080f1a;
+  --t-chat-pattern: none;
+}
+
+/* === ТЕМА: Тёмно-синяя (по умолчанию, текущая) === */
+body[data-theme="dark-blue"] {
+  --t-bg-deep: #080f1a;
+  --t-bg-main: #0a1120;
+  --t-bg-panel: #0d1421;
+  --t-bg-hover: #0e1627;
+  --t-bg-active: #111827;
+  --t-bg-card: #111827;
+  --t-border: #1a2332;
+  --t-border-md: #2a3548;
+  --t-accent: #4a9eff;
+  --t-accent-2: #3b8fe0;
+  --t-text: #e2e8f0;
+  --t-text-muted: #94a3b8;
+  --t-text-dim: #4a5568;
+  --t-placeholder: #2a3548;
+  --t-msg-own-bg: #1a3a5c;
+  --t-msg-own-br: #2a4a6c;
+  --t-chat-bg: #080f1a;
+  --t-chat-pattern: none;
+}
+
+/* === ТЕМА: WhatsApp (зелёная) === */
+body[data-theme="whatsapp"] {
+  --t-bg-deep: #111b21;
+  --t-bg-main: #202c33;
+  --t-bg-panel: #111b21;
+  --t-bg-hover: #2a3942;
+  --t-bg-active: #2a3942;
+  --t-bg-card: #202c33;
+  --t-border: #2a3942;
+  --t-border-md: #3b4a54;
+  --t-accent: #00a884;
+  --t-accent-2: #008f72;
+  --t-text: #e9edef;
+  --t-text-muted: #8696a0;
+  --t-text-dim: #667781;
+  --t-placeholder: #3b4a54;
+  --t-msg-own-bg: #005c4b;
+  --t-msg-own-br: #005c4b;
+  --t-chat-bg: #0b141a;
+  --t-chat-pattern: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23182229' fill-opacity='0.6'%3E%3Cpath d='M0 0h1v1H0zm2 0h1v1H2zm2 0h1v1H4zm2 0h1v1H6zm2 0h1v1H8zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1z'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* === ТЕМА: Telegram (синяя) === */
+body[data-theme="telegram"] {
+  --t-bg-deep: #17212b;
+  --t-bg-main: #232e3c;
+  --t-bg-panel: #17212b;
+  --t-bg-hover: #2b5278;
+  --t-bg-active: #2b5278;
+  --t-bg-card: #232e3c;
+  --t-border: #2b3a4a;
+  --t-border-md: #3d5066;
+  --t-accent: #5288c1;
+  --t-accent-2: #3f79b5;
+  --t-text: #f5f5f5;
+  --t-text-muted: #a2acb4;
+  --t-text-dim: #6c7883;
+  --t-placeholder: #3d5066;
+  --t-msg-own-bg: #2b5278;
+  --t-msg-own-br: #2b5278;
+  --t-chat-bg: #0e1621;
+  --t-chat-pattern: none;
+}
+
+/* === ТЕМА: Светлая (WhatsApp Light) === */
+body[data-theme="light"] {
+  --t-bg-deep: #f0f2f5;
+  --t-bg-main: #ffffff;
+  --t-bg-panel: #f0f2f5;
+  --t-bg-hover: #f5f6f6;
+  --t-bg-active: #e9edef;
+  --t-bg-card: #ffffff;
+  --t-border: #e9edef;
+  --t-border-md: #d1d7db;
+  --t-accent: #00a884;
+  --t-accent-2: #008f72;
+  --t-text: #111b21;
+  --t-text-muted: #54656f;
+  --t-text-dim: #8696a0;
+  --t-placeholder: #d1d7db;
+  --t-msg-own-bg: #d9fdd3;
+  --t-msg-own-br: #c8f0bf;
+  --t-chat-bg: #efeae2;
+  --t-chat-pattern: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23c8bfb0' fill-opacity='0.4'%3E%3Cpath d='M0 0h1v1H0zm2 0h1v1H2zm2 0h1v1H4zm2 0h1v1H6zm2 0h1v1H8zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1z'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* === ТЕМА: Розово-фиолетовая === */
+body[data-theme="purple"] {
+  --t-bg-deep: #1a0d2e;
+  --t-bg-main: #1e1035;
+  --t-bg-panel: #160b28;
+  --t-bg-hover: #2a1550;
+  --t-bg-active: #2a1550;
+  --t-bg-card: #22123e;
+  --t-border: #2d1a50;
+  --t-border-md: #3d2465;
+  --t-accent: #a855f7;
+  --t-accent-2: #9333ea;
+  --t-text: #f3e8ff;
+  --t-text-muted: #c4b5fd;
+  --t-text-dim: #7c5cbf;
+  --t-placeholder: #3d2465;
+  --t-msg-own-bg: #5b21b6;
+  --t-msg-own-br: #6d28d9;
+  --t-chat-bg: #120a22;
+  --t-chat-pattern: none;
+}
+
+/* === ТЕМА: Тёмно-серая (Slack) === */
+body[data-theme="slate"] {
+  --t-bg-deep: #1a1d21;
+  --t-bg-main: #222529;
+  --t-bg-panel: #19191d;
+  --t-bg-hover: #2c2d30;
+  --t-bg-active: #27282c;
+  --t-bg-card: #2c2d30;
+  --t-border: #2c2d30;
+  --t-border-md: #424549;
+  --t-accent: #e8912d;
+  --t-accent-2: #cf7a22;
+  --t-text: #d1d2d3;
+  --t-text-muted: #ababad;
+  --t-text-dim: #6b6f76;
+  --t-placeholder: #424549;
+  --t-msg-own-bg: #3f0e40;
+  --t-msg-own-br: #521053;
+  --t-chat-bg: #1a1d21;
+  --t-chat-pattern: none;
+}
+
+/* === ТЕМА: Аквамариновая === */
+body[data-theme="teal"] {
+  --t-bg-deep: #0d1f1e;
+  --t-bg-main: #0f2523;
+  --t-bg-panel: #0a1a19;
+  --t-bg-hover: #163330;
+  --t-bg-active: #1a3e3a;
+  --t-bg-card: #122e2c;
+  --t-border: #1a3533;
+  --t-border-md: #264f4c;
+  --t-accent: #14b8a6;
+  --t-accent-2: #0d9488;
+  --t-text: #e0fdf9;
+  --t-text-muted: #99f6e4;
+  --t-text-dim: #4d9e95;
+  --t-placeholder: #264f4c;
+  --t-msg-own-bg: #134e4a;
+  --t-msg-own-br: #115e59;
+  --t-chat-bg: #071413;
+  --t-chat-pattern: none;
 }

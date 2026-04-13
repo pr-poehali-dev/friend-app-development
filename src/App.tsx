@@ -1,5 +1,54 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, createContext, useContext } from "react";
 import Icon from "@/components/ui/icon";
+
+// ===== THEME =====
+export type ThemeId = "dark-blue" | "whatsapp" | "telegram" | "light" | "purple" | "slate" | "teal";
+
+export const THEMES: { id: ThemeId; name: string; accent: string; bg: string; preview: string[] }[] = [
+  { id: "dark-blue", name: "Тёмно-синяя",    accent: "#4a9eff", bg: "#0a1120", preview: ["#0a1120","#111827","#4a9eff","#1a3a5c"] },
+  { id: "whatsapp",  name: "WhatsApp",        accent: "#00a884", bg: "#202c33", preview: ["#202c33","#111b21","#00a884","#005c4b"] },
+  { id: "telegram",  name: "Telegram",        accent: "#5288c1", bg: "#232e3c", preview: ["#232e3c","#17212b","#5288c1","#2b5278"] },
+  { id: "light",     name: "Светлая",         accent: "#00a884", bg: "#ffffff", preview: ["#ffffff","#f0f2f5","#00a884","#d9fdd3"] },
+  { id: "purple",    name: "Фиолетовая",      accent: "#a855f7", bg: "#1e1035", preview: ["#1e1035","#160b28","#a855f7","#5b21b6"] },
+  { id: "slate",     name: "Тёмно-серая",     accent: "#e8912d", bg: "#222529", preview: ["#222529","#19191d","#e8912d","#3f0e40"] },
+  { id: "teal",      name: "Аквамариновая",   accent: "#14b8a6", bg: "#0f2523", preview: ["#0f2523","#0a1a19","#14b8a6","#134e4a"] },
+];
+
+const ThemeContext = createContext<{ theme: ThemeId; setTheme: (t: ThemeId) => void }>({ theme: "dark-blue", setTheme: () => {} });
+export const useTheme = () => useContext(ThemeContext);
+
+function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [theme, setThemeState] = useState<ThemeId>(() => (localStorage.getItem("app_theme") as ThemeId) || "dark-blue");
+  const setTheme = (t: ThemeId) => {
+    setThemeState(t);
+    localStorage.setItem("app_theme", t);
+    document.body.setAttribute("data-theme", t);
+  };
+  useEffect(() => { document.body.setAttribute("data-theme", theme); }, [theme]);
+  return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>;
+}
+
+// T — shortcut для CSS-переменных темы
+const T = {
+  bgDeep:   "var(--t-bg-deep)",
+  bgMain:   "var(--t-bg-main)",
+  bgPanel:  "var(--t-bg-panel)",
+  bgHover:  "var(--t-bg-hover)",
+  bgActive: "var(--t-bg-active)",
+  bgCard:   "var(--t-bg-card)",
+  border:   "var(--t-border)",
+  borderMd: "var(--t-border-md)",
+  accent:   "var(--t-accent)",
+  accent2:  "var(--t-accent-2)",
+  text:     "var(--t-text)",
+  muted:    "var(--t-text-muted)",
+  dim:      "var(--t-text-dim)",
+  online:   "var(--t-online)",
+  danger:   "var(--t-danger)",
+  msgOwnBg: "var(--t-msg-own-bg)",
+  msgOwnBr: "var(--t-msg-own-br)",
+  chatBg:   "var(--t-chat-bg)",
+};
 
 const API = {
   auth: "https://functions.poehali.dev/959bee44-9a42-4a9f-b352-21605b616456",
@@ -611,6 +660,8 @@ function SettingsPanel({
   onUserUpdate: (u: User) => void;
   onLogout: () => void;
 }) {
+  const [activeTab, setActiveTab] = useState<"profile" | "appearance">("profile");
+  const { theme, setTheme } = useTheme();
   const [displayName, setDisplayName] = useState(currentUser.display_name);
   const [position, setPosition] = useState(currentUser.position || "");
   const [department, setDepartment] = useState(currentUser.department || "");
@@ -694,40 +745,100 @@ function SettingsPanel({
     }
   };
 
+  const tabs = [
+    { id: "profile" as const, icon: "User", label: "Профиль" },
+    { id: "appearance" as const, icon: "Palette", label: "Оформление" },
+  ];
+
   return (
     <div className="flex flex-1 overflow-hidden">
       {/* Left nav */}
-      <div className="w-52 flex flex-col border-r border-[#1a2332] bg-[#0a1120] flex-shrink-0 pt-4">
-        <h2 className="px-4 text-[10px] font-semibold text-[#4a5568] tracking-widest uppercase mb-3">Настройки</h2>
-        {[
-          { icon: "User", label: "Профиль", active: true },
-          { icon: "Bell", label: "Уведомления", active: false },
-          { icon: "Shield", label: "Безопасность", active: false },
-          { icon: "Link", label: "Интеграции", active: false },
-        ].map(item => (
-          <button key={item.label} className={`flex items-center gap-3 px-4 py-2.5 text-xs transition-colors ${item.active ? "bg-[#111827] text-[#4a9eff]" : "text-[#4a5568] hover:text-[#94a3b8] hover:bg-[#0e1627]"}`}>
+      <div className="w-52 flex flex-col border-r flex-shrink-0 pt-4" style={{ borderColor: "var(--t-border)", background: "var(--t-bg-main)" }}>
+        <h2 className="px-4 text-[10px] font-semibold tracking-widest uppercase mb-3" style={{ color: "var(--t-text-dim)" }}>Настройки</h2>
+        {tabs.map(item => (
+          <button key={item.id} onClick={() => setActiveTab(item.id)}
+            className="flex items-center gap-3 px-4 py-2.5 text-xs transition-colors text-left"
+            style={activeTab === item.id ? { background: "var(--t-bg-active)", color: "var(--t-accent)" } : { color: "var(--t-text-dim)" }}>
             <Icon name={item.icon} size={14} />{item.label}
           </button>
         ))}
         <div className="mt-auto mb-4 px-4">
-          <button onClick={onLogout} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#f87171] hover:bg-[#1a1020] rounded-sm transition-colors border border-transparent hover:border-[#3a1520]">
+          <button onClick={onLogout} className="w-full flex items-center gap-2 px-3 py-2 text-xs rounded-sm transition-colors" style={{ color: "var(--t-danger)" }}>
             <Icon name="LogOut" size={13} /> Выйти
           </button>
         </div>
       </div>
 
-      {/* Profile form */}
+      {/* Content */}
       <div className="flex-1 overflow-y-auto px-8 py-6">
-        <h3 className="text-sm font-semibold text-[#e2e8f0] mb-6">Профиль</h3>
+
+      {/* === ВКЛАДКА: ОФОРМЛЕНИЕ === */}
+      {activeTab === "appearance" && (
+        <div className="max-w-2xl">
+          <h3 className="text-sm font-semibold mb-1" style={{ color: "var(--t-text)" }}>Оформление</h3>
+          <p className="text-xs mb-6" style={{ color: "var(--t-text-dim)" }}>Выберите цветовую тему интерфейса</p>
+
+          <div className="grid grid-cols-2 gap-3 mb-8">
+            {THEMES.map(t => {
+              const isActive = theme === t.id;
+              return (
+                <button key={t.id} onClick={() => setTheme(t.id)}
+                  className="relative rounded-xl p-4 text-left transition-all duration-200 group"
+                  style={{ background: t.bg, border: `2px solid ${isActive ? t.accent : "transparent"}`, boxShadow: isActive ? `0 0 0 1px ${t.accent}40` : "none" }}>
+                  {/* Мини-превью */}
+                  <div className="flex gap-1.5 mb-3">
+                    {t.preview.map((c, i) => (
+                      <div key={i} className="rounded-full" style={{ width: i === 0 ? 20 : 14, height: i === 0 ? 20 : 14, background: c, flexShrink: 0 }} />
+                    ))}
+                  </div>
+                  {/* Мини интерфейс */}
+                  <div className="rounded-lg overflow-hidden mb-3" style={{ background: t.preview[1], height: 56 }}>
+                    <div className="flex gap-1 p-1.5">
+                      <div className="rounded" style={{ width: 8, height: 8, background: t.preview[0] }} />
+                      <div className="flex-1 rounded" style={{ height: 8, background: t.preview[0] }} />
+                    </div>
+                    <div className="flex justify-end px-1.5 pb-1">
+                      <div className="rounded-md px-2 py-0.5 text-[8px]" style={{ background: t.preview[3], color: "#fff" }}>●●●</div>
+                    </div>
+                    <div className="px-1.5">
+                      <div className="rounded-md px-1.5 py-0.5 text-[8px] w-fit" style={{ background: t.preview[1], border: `1px solid ${t.preview[0]}`, color: t.accent }}>●●●●●</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium" style={{ color: t.accent }}>{t.name}</span>
+                    {isActive && (
+                      <div className="w-4 h-4 rounded-full flex items-center justify-center" style={{ background: t.accent }}>
+                        <Icon name="Check" size={10} className="text-white" />
+                      </div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="rounded-xl p-4" style={{ background: "var(--t-bg-main)", border: "1px solid var(--t-border)" }}>
+            <div className="flex items-center gap-2 mb-1">
+              <Icon name="Info" size={13} className="text-[var(--t-accent)]" />
+              <span className="text-xs font-medium" style={{ color: "var(--t-text)" }}>Тема применяется мгновенно</span>
+            </div>
+            <p className="text-xs" style={{ color: "var(--t-text-dim)" }}>Выбор сохраняется в браузере и применяется при следующем входе.</p>
+          </div>
+        </div>
+      )}
+
+      {/* === ВКЛАДКА: ПРОФИЛЬ === */}
+      {activeTab === "profile" && <>
+        <h3 className="text-sm font-semibold mb-6" style={{ color: "var(--t-text)" }}>Профиль</h3>
 
         {/* Avatar preview */}
-        <div className="flex items-center gap-4 mb-7 p-4 bg-[#0a1120] border border-[#1a2332] rounded-sm max-w-lg">
+        <div className="flex items-center gap-4 mb-7 p-4 rounded-sm max-w-lg" style={{ background: "var(--t-bg-main)", border: "1px solid var(--t-border)" }}>
           <label className="relative w-14 h-14 cursor-pointer group flex-shrink-0">
             <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} disabled={avatarUploading} />
             {currentUser.avatar_url ? (
               <img src={currentUser.avatar_url} alt="avatar" className="w-14 h-14 rounded-sm object-cover border border-[#2a3548]" />
             ) : (
-              <div className="w-14 h-14 rounded-sm bg-[#1a2332] border border-[#2a3548] flex items-center justify-center text-[#4a9eff] text-lg font-medium">
+              <div className="w-14 h-14 rounded-sm flex items-center justify-center text-lg font-medium" style={{ background: "var(--t-border)", border: "1px solid var(--t-border-md)", color: "var(--t-accent)" }}>
                 {displayName.trim().split(" ").length >= 2
                   ? (displayName.trim().split(" ")[0][0] + displayName.trim().split(" ")[1][0]).toUpperCase()
                   : currentUser.avatar_initials}
@@ -740,13 +851,13 @@ function SettingsPanel({
             </div>
           </label>
           <div>
-            <div className="text-sm font-medium text-[#e2e8f0]">{displayName || currentUser.display_name}</div>
-            {position && <div className="text-xs text-[#4a9eff] mt-0.5">{position}</div>}
-            {department && <div className="text-[11px] text-[#4a5568] mt-0.5">{department}</div>}
+            <div className="text-sm font-medium" style={{ color: "var(--t-text)" }}>{displayName || currentUser.display_name}</div>
+            {position && <div className="text-xs mt-0.5" style={{ color: "var(--t-accent)" }}>{position}</div>}
+            {department && <div className="text-[11px] mt-0.5" style={{ color: "var(--t-text-dim)" }}>{department}</div>}
             <button
               type="button"
               onClick={() => (document.querySelector('input[type="file"]') as HTMLInputElement)?.click()}
-              className="text-[10px] text-[#4a9eff] hover:text-[#3b8fe0] mt-1 transition-colors"
+              className="text-[10px] mt-1 transition-colors" style={{ color: "var(--t-accent)" }}
             >
               {currentUser.avatar_url ? "Сменить фото" : "Загрузить фото"}
             </button>
@@ -757,40 +868,44 @@ function SettingsPanel({
         <form onSubmit={handleSave} className="space-y-4 max-w-lg">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <label className="block text-[10px] font-semibold text-[#4a5568] uppercase tracking-widest mb-1.5">Имя и Фамилия</label>
+              <label className="block text-[10px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: "var(--t-text-dim)" }}>Имя и Фамилия</label>
               <input
                 value={displayName}
                 onChange={e => { setDisplayName(e.target.value); setError(""); setSuccess(false); }}
                 placeholder="Иван Петров"
-                className="w-full bg-[#111827] border border-[#1a2332] rounded-sm px-3 py-2 text-xs text-[#e2e8f0] placeholder-[#2a3548] focus:outline-none focus:border-[#4a9eff] transition-colors"
+                className="w-full rounded-sm px-3 py-2 text-xs placeholder-[#2a3548] focus:outline-none transition-colors"
+                style={{ background: "var(--t-bg-active)", border: "1px solid var(--t-border)", color: "var(--t-text)" }}
               />
             </div>
             <div>
-              <label className="block text-[10px] font-semibold text-[#4a5568] uppercase tracking-widest mb-1.5">Должность</label>
+              <label className="block text-[10px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: "var(--t-text-dim)" }}>Должность</label>
               <input
                 value={position}
                 onChange={e => { setPosition(e.target.value); setSuccess(false); }}
                 placeholder="Менеджер"
-                className="w-full bg-[#111827] border border-[#1a2332] rounded-sm px-3 py-2 text-xs text-[#e2e8f0] placeholder-[#2a3548] focus:outline-none focus:border-[#4a9eff] transition-colors"
+                className="w-full rounded-sm px-3 py-2 text-xs placeholder-[#2a3548] focus:outline-none transition-colors"
+                style={{ background: "var(--t-bg-active)", border: "1px solid var(--t-border)", color: "var(--t-text)" }}
               />
             </div>
             <div>
-              <label className="block text-[10px] font-semibold text-[#4a5568] uppercase tracking-widest mb-1.5">Отдел</label>
+              <label className="block text-[10px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: "var(--t-text-dim)" }}>Отдел</label>
               <input
                 value={department}
                 onChange={e => { setDepartment(e.target.value); setSuccess(false); }}
                 placeholder="Продажи"
-                className="w-full bg-[#111827] border border-[#1a2332] rounded-sm px-3 py-2 text-xs text-[#e2e8f0] placeholder-[#2a3548] focus:outline-none focus:border-[#4a9eff] transition-colors"
+                className="w-full rounded-sm px-3 py-2 text-xs placeholder-[#2a3548] focus:outline-none transition-colors"
+                style={{ background: "var(--t-bg-active)", border: "1px solid var(--t-border)", color: "var(--t-text)" }}
               />
             </div>
             <div className="col-span-2">
-              <label className="block text-[10px] font-semibold text-[#4a5568] uppercase tracking-widest mb-1.5">Телефон</label>
+              <label className="block text-[10px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: "var(--t-text-dim)" }}>Телефон</label>
               <input
                 value={currentUser.phone || ""}
                 readOnly
-                className="w-full bg-[#0a1120] border border-[#1a2332] rounded-sm px-3 py-2 text-xs text-[#4a5568] font-mono cursor-not-allowed"
+                className="w-full rounded-sm px-3 py-2 text-xs font-mono cursor-not-allowed"
+                style={{ background: "var(--t-bg-main)", border: "1px solid var(--t-border)", color: "var(--t-text-dim)" }}
               />
-              <p className="mt-1 text-[10px] text-[#2a3548]">Номер телефона изменить нельзя</p>
+              <p className="mt-1 text-[10px]" style={{ color: "var(--t-border-md)" }}>Номер телефона изменить нельзя</p>
             </div>
           </div>
 
@@ -809,7 +924,8 @@ function SettingsPanel({
             <button
               type="submit"
               disabled={saving || !isDirty}
-              className="px-5 py-2 bg-[#4a9eff] text-[#080f1a] text-xs font-semibold rounded-sm hover:bg-[#3b8fe0] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              className="px-5 py-2 text-xs font-semibold rounded-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              style={{ background: "var(--t-accent)", color: "var(--t-bg-deep)" }}
             >
               {saving ? (
                 <span className="flex items-center gap-2">
@@ -827,20 +943,24 @@ function SettingsPanel({
                   setDepartment(currentUser.department || "");
                   setError("");
                 }}
-                className="px-4 py-2 text-xs text-[#4a5568] hover:text-[#94a3b8] transition-colors"
+                className="px-4 py-2 text-xs transition-colors"
+                style={{ color: "var(--t-text-dim)" }}
               >
                 Отмена
               </button>
             )}
           </div>
         </form>
+      </>}
+
       </div>
     </div>
   );
 }
 
 // ============ MAIN APP ============
-export default function App() {
+function AppInner() {
+  useTheme(); // подписка на тему (применяется через CSS body[data-theme])
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -1196,8 +1316,8 @@ export default function App() {
 
   if (!authChecked && !currentUser) {
     return (
-      <div className="flex h-screen w-screen bg-[#0d1421] items-center justify-center">
-        <div className="text-[#4a5568] text-xs">Загрузка...</div>
+      <div className="flex h-screen w-screen items-center justify-center" style={{ background: "var(--t-bg-panel)" }}>
+        <div className="text-xs" style={{ color: "var(--t-text-dim)" }}>Загрузка...</div>
       </div>
     );
   }
@@ -1205,18 +1325,18 @@ export default function App() {
   if (!currentUser) return <LoginScreen onLogin={handleLogin} />;
 
   return (
-    <div className="flex h-screen w-screen bg-[#0d1421] text-[#e2e8f0] overflow-hidden" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+    <div className="flex h-screen w-screen overflow-hidden transition-colors duration-300" style={{ fontFamily: "'IBM Plex Sans', sans-serif", background: T.bgPanel, color: T.text }}>
       {/* Sidebar */}
-      <nav className="flex flex-col items-center py-4 w-16 bg-[#080f1a] border-r border-[#1a2332] gap-1 flex-shrink-0">
+      <nav className="flex flex-col items-center py-4 w-16 gap-1 flex-shrink-0" style={{ background: T.bgDeep, borderRight: `1px solid ${T.border}` }}>
         <div className="mb-4">
-          <div className="w-9 h-9 rounded-sm bg-[#4a9eff] flex items-center justify-center">
-            <span className="text-[#080f1a] font-semibold text-sm">Д</span>
+          <div className="w-9 h-9 rounded-sm flex items-center justify-center" style={{ background: T.accent }}>
+            <span className="font-semibold text-sm" style={{ color: T.bgDeep }}>Д</span>
           </div>
         </div>
         {navItems.map(item => (
           <button key={item.id} onClick={() => setSection(item.id)} title={item.label}
-            className={`w-11 h-11 rounded-sm flex flex-col items-center justify-center gap-0.5 transition-all duration-150
-              ${section === item.id ? "bg-[#1a2332] text-[#4a9eff]" : "text-[#4a5568] hover:text-[#94a3b8] hover:bg-[#111827]"}`}>
+            className="w-11 h-11 rounded-sm flex flex-col items-center justify-center gap-0.5 transition-all duration-150"
+            style={section === item.id ? { background: T.border, color: T.accent } : { color: T.dim }}>
             <Icon name={item.icon} size={18} />
             <span className="text-[9px] font-medium">{item.label}</span>
           </button>
@@ -1224,17 +1344,15 @@ export default function App() {
         <div className="mt-auto flex flex-col items-center gap-1">
           {bottomNav.map(item => (
             <button key={item.id} onClick={() => setSection(item.id)} title={item.label}
-              className={`w-11 h-11 rounded-sm flex flex-col items-center justify-center gap-0.5 transition-all duration-150
-                ${section === item.id ? "bg-[#1a2332] text-[#4a9eff]" : "text-[#4a5568] hover:text-[#94a3b8] hover:bg-[#111827]"}`}>
+              className="w-11 h-11 rounded-sm flex flex-col items-center justify-center gap-0.5 transition-all duration-150"
+              style={section === item.id ? { background: T.border, color: T.accent } : { color: T.dim }}>
               <Icon name={item.icon} size={18} />
               <span className="text-[9px] font-medium">{item.label}</span>
             </button>
           ))}
-          <div className="w-11 h-px bg-[#1a2332] my-1" />
-          <div
-            title={currentUser.display_name}
-            className="w-9 h-9 rounded-sm bg-[#1a2332] border border-[#2a3548] flex items-center justify-center text-[#4a9eff] text-xs font-medium cursor-pointer hover:border-[#4a9eff] transition-colors"
-          >
+          <div className="w-11 h-px my-1" style={{ background: T.border }} />
+          <div title={currentUser.display_name} className="w-9 h-9 rounded-sm flex items-center justify-center text-xs font-medium cursor-pointer transition-colors"
+            style={{ background: T.border, border: `1px solid ${T.borderMd}`, color: T.accent }}>
             {currentUser.avatar_initials}
           </div>
         </div>
@@ -1246,40 +1364,44 @@ export default function App() {
         {/* CHATS */}
         {section === "chats" && (
           <>
-            <div className="w-72 flex flex-col border-r border-[#1a2332] bg-[#0a1120] flex-shrink-0">
-              <div className="px-4 pt-4 pb-3 border-b border-[#1a2332]">
+            <div className="w-72 flex flex-col border-r flex-shrink-0" style={{ borderColor: "var(--t-border)", background: "var(--t-bg-main)" }}>
+              <div className="px-4 pt-4 pb-3 border-b" style={{ borderColor: "var(--t-border)" }}>
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-xs font-semibold text-[#e2e8f0] tracking-widest uppercase">Чаты</h2>
-                  {loadingChats && <div className="w-3 h-3 border border-[#4a9eff] border-t-transparent rounded-full animate-spin" />}
+                  <h2 className="text-xs font-semibold tracking-widest uppercase" style={{ color: "var(--t-text)" }}>Чаты</h2>
+                  {loadingChats && <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--t-accent)", borderTopColor: "transparent" }} />}
                 </div>
                 <div className="relative">
-                  <Icon name="Search" size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#4a5568]" />
+                  <Icon name="Search" size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--t-text-dim)" }} />
                   <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Поиск..."
-                    className="w-full bg-[#111827] border border-[#1a2332] rounded-sm pl-7 pr-3 py-1.5 text-xs text-[#94a3b8] placeholder-[#4a5568] focus:outline-none focus:border-[#4a9eff] transition-colors" />
+                    className="w-full rounded-sm pl-7 pr-3 py-1.5 text-xs placeholder-[#4a5568] focus:outline-none transition-colors"
+                    style={{ background: "var(--t-bg-active)", border: "1px solid var(--t-border)", color: "var(--t-text-muted)" }} />
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto">
                 {filteredChats.map(chat => (
                   <button key={chat.id} onClick={() => setActiveChat(chat)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 border-b border-[#0d1421] text-left transition-all duration-150
-                      ${activeChat?.id === chat.id ? "bg-[#111827]" : "hover:bg-[#0e1627]"}`}>
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left transition-all duration-150"
+                    style={{
+                      borderBottom: "1px solid var(--t-bg-panel)",
+                      background: activeChat?.id === chat.id ? "var(--t-bg-active)" : undefined,
+                    }}>
                     <AvatarBadge initials={chat.avatar} online={chat.type === "personal" ? chat.online : undefined} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-0.5">
-                        <span className="text-xs font-medium text-[#e2e8f0] truncate">{chat.name}</span>
-                        <span className="text-[10px] text-[#4a5568] ml-2 flex-shrink-0">{chat.last_time}</span>
+                        <span className="text-xs font-medium truncate" style={{ color: "var(--t-text)" }}>{chat.name}</span>
+                        <span className="text-[10px] ml-2 flex-shrink-0" style={{ color: "var(--t-text-dim)" }}>{chat.last_time}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-[#4a5568] truncate">{chat.last_message}</span>
+                        <span className="text-[11px] truncate" style={{ color: "var(--t-text-dim)" }}>{chat.last_message}</span>
                         {chat.unread > 0 && (
-                          <span className="ml-2 flex-shrink-0 w-4 h-4 rounded-full bg-[#4a9eff] text-[#080f1a] text-[9px] font-semibold flex items-center justify-center">{chat.unread}</span>
+                          <span className="ml-2 flex-shrink-0 w-4 h-4 rounded-full text-[9px] font-semibold flex items-center justify-center" style={{ background: "var(--t-accent)", color: "var(--t-bg-deep)" }}>{chat.unread}</span>
                         )}
                       </div>
                     </div>
                   </button>
                 ))}
                 {chats.length === 0 && !loadingChats && (
-                  <div className="p-4 text-xs text-[#4a5568] text-center">Нет чатов</div>
+                  <div className="p-4 text-xs text-center" style={{ color: "var(--t-text-dim)" }}>Нет чатов</div>
                 )}
               </div>
             </div>
@@ -1287,12 +1409,12 @@ export default function App() {
             <div className="flex flex-col flex-1 overflow-hidden">
               {activeChat ? (
                 <>
-                  <div className="flex items-center justify-between px-5 py-3 border-b border-[#1a2332] bg-[#0a1120] flex-shrink-0">
+                  <div className="flex items-center justify-between px-5 py-3 border-b flex-shrink-0" style={{ borderColor: "var(--t-border)", background: "var(--t-bg-main)" }}>
                     <div className="flex items-center gap-3">
                       <AvatarBadge initials={activeChat.avatar} online={activeChat.type === "personal" ? activeChat.online : undefined} />
                       <div>
-                        <div className="text-sm font-medium text-[#e2e8f0]">{activeChat.name}</div>
-                        <div className="text-[11px] text-[#4a5568]">
+                        <div className="text-sm font-medium" style={{ color: "var(--t-text)" }}>{activeChat.name}</div>
+                        <div className="text-[11px]" style={{ color: "var(--t-text-dim)" }}>
                           {activeChat.type === "personal" ? (activeChat.online ? "В сети" : "Не в сети") : "Групповой чат"}
                         </div>
                       </div>
@@ -1303,25 +1425,25 @@ export default function App() {
                         { icon: "Video", action: () => setActiveVideo(true) },
                         { icon: "MoreVertical", action: () => {} },
                       ].map((btn, i) => (
-                        <button key={i} onClick={btn.action} className="w-8 h-8 rounded-sm flex items-center justify-center text-[#4a5568] hover:text-[#94a3b8] hover:bg-[#1a2332] transition-all">
+                        <button key={i} onClick={btn.action} className="w-8 h-8 rounded-sm flex items-center justify-center transition-all" style={{ color: "var(--t-text-dim)" }}>
                           <Icon name={btn.icon} size={16} />
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3">
+                  <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3" style={{ background: "var(--t-chat-bg)", backgroundImage: "var(--t-chat-pattern)" }}>
                     <div className="flex items-center gap-3 mb-2">
-                      <div className="flex-1 h-px bg-[#1a2332]" />
-                      <span className="text-[10px] text-[#4a5568] font-mono">
+                      <div className="flex-1 h-px" style={{ background: "var(--t-border)" }} />
+                      <span className="text-[10px] font-mono" style={{ color: "var(--t-text-dim)" }}>
                         {new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}
                       </span>
-                      <div className="flex-1 h-px bg-[#1a2332]" />
+                      <div className="flex-1 h-px" style={{ background: "var(--t-border)" }} />
                     </div>
 
                     {loadingMessages && messages.length === 0 && (
                       <div className="flex justify-center py-8">
-                        <div className="w-5 h-5 border border-[#4a9eff] border-t-transparent rounded-full animate-spin" />
+                        <div className="w-5 h-5 border border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--t-accent)", borderTopColor: "transparent" }} />
                       </div>
                     )}
 
@@ -1330,35 +1452,37 @@ export default function App() {
                         {!msg.own && <AvatarBadge initials={msg.sender_avatar || "??"} size="sm" />}
                         <div className={`max-w-[65%] flex flex-col gap-0.5 ${msg.own ? "items-end" : "items-start"}`}>
                           {!msg.own && (
-                            <span className="text-[10px] text-[#4a9eff] font-medium ml-1">{msg.sender_name}</span>
+                            <span className="text-[10px] font-medium ml-1" style={{ color: "var(--t-accent)" }}>{msg.sender_name}</span>
                           )}
-                          <div className={`rounded-sm px-3 py-2 text-xs leading-relaxed
-                            ${msg.own ? "bg-[#1a3a5c] border border-[#2a4a6c] text-[#e2e8f0]" : "bg-[#111827] border border-[#1a2332] text-[#cbd5e1]"}`}>
+                          <div className="rounded-sm px-3 py-2 text-xs leading-relaxed"
+                            style={msg.own
+                              ? { background: "var(--t-msg-own-bg)", border: "1px solid var(--t-msg-own-br)", color: "var(--t-text)" }
+                              : { background: "var(--t-bg-active)", border: "1px solid var(--t-border)", color: "var(--t-text-muted)" }}>
                             {msg.type === "file" ? (
                               <a href={msg.file_url || "#"} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-                                <Icon name={/\.(png|jpe?g|gif|webp|svg)$/i.test(msg.file_name || "") ? "Image" : /\.(zip|rar|7z|tar)$/i.test(msg.file_name || "") ? "Archive" : "FileText"} size={18} className="text-[#4a9eff] flex-shrink-0" />
+                                <Icon name={/\.(png|jpe?g|gif|webp|svg)$/i.test(msg.file_name || "") ? "Image" : /\.(zip|rar|7z|tar)$/i.test(msg.file_name || "") ? "Archive" : "FileText"} size={18} className="flex-shrink-0" style={{ color: "var(--t-accent)" }} />
                                 <div className="min-w-0">
-                                  <div className="font-medium text-[#e2e8f0] truncate max-w-[180px]">{msg.file_name}</div>
-                                  <div className="text-[10px] text-[#4a5568] flex items-center gap-1">{msg.file_size} <Icon name="Download" size={10} /></div>
+                                  <div className="font-medium truncate max-w-[180px]" style={{ color: "var(--t-text)" }}>{msg.file_name}</div>
+                                  <div className="text-[10px] flex items-center gap-1" style={{ color: "var(--t-text-dim)" }}>{msg.file_size} <Icon name="Download" size={10} /></div>
                                 </div>
                               </a>
                             ) : msg.text}
                           </div>
-                          <span className="text-[10px] text-[#4a5568] font-mono mx-1">{msg.time}</span>
+                          <span className="text-[10px] font-mono mx-1" style={{ color: "var(--t-text-dim)" }}>{msg.time}</span>
                         </div>
                       </div>
                     ))}
                   </div>
 
-                  <div className="px-5 py-3 border-t border-[#1a2332] bg-[#0a1120] flex-shrink-0">
+                  <div className="px-5 py-3 border-t flex-shrink-0" style={{ borderColor: "var(--t-border)", background: "var(--t-bg-main)" }}>
                     {uploadingFile && (
-                      <div className="flex items-center gap-2 text-[11px] text-[#4a9eff] mb-2">
-                        <div className="w-3 h-3 border border-[#4a9eff] border-t-transparent rounded-full animate-spin" />
+                      <div className="flex items-center gap-2 text-[11px] mb-2" style={{ color: "var(--t-accent)" }}>
+                        <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--t-accent)", borderTopColor: "transparent" }} />
                         Загружаем файл...
                       </div>
                     )}
-                    <div className="flex items-center gap-2 bg-[#111827] border border-[#1a2332] rounded-sm px-3 py-2 focus-within:border-[#4a9eff] transition-colors">
-                      <label className="text-[#4a5568] hover:text-[#94a3b8] transition-colors cursor-pointer">
+                    <div className="flex items-center gap-2 rounded-sm px-3 py-2 transition-colors" style={{ background: "var(--t-bg-active)", border: "1px solid var(--t-border)" }}>
+                      <label className="transition-colors cursor-pointer" style={{ color: "var(--t-text-dim)" }}>
                         <Icon name="Paperclip" size={16} />
                         <input type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ""; }} />
                       </label>
@@ -1367,12 +1491,14 @@ export default function App() {
                         onChange={e => setMsgInput(e.target.value)}
                         onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                         placeholder="Написать сообщение..."
-                        className="flex-1 bg-transparent text-xs text-[#e2e8f0] placeholder-[#4a5568] focus:outline-none"
+                        className="flex-1 bg-transparent text-xs placeholder-[#4a5568] focus:outline-none"
+                        style={{ color: "var(--t-text)" }}
                       />
                       <button
                         onClick={handleSend}
                         disabled={sendingMsg || !msgInput.trim()}
-                        className="w-7 h-7 bg-[#4a9eff] rounded-sm flex items-center justify-center text-[#080f1a] hover:bg-[#3b8fe0] transition-colors disabled:opacity-40"
+                        className="w-7 h-7 rounded-sm flex items-center justify-center transition-colors disabled:opacity-40"
+                        style={{ background: "var(--t-accent)", color: "var(--t-bg-deep)" }}
                       >
                         <Icon name="Send" size={13} />
                       </button>
@@ -1380,7 +1506,7 @@ export default function App() {
                   </div>
                 </>
               ) : (
-                <div className="flex-1 flex items-center justify-center text-[#4a5568]">
+                <div className="flex-1 flex items-center justify-center" style={{ color: "var(--t-text-dim)" }}>
                   <div className="text-center">
                     <Icon name="MessageSquare" size={40} className="mx-auto mb-3 opacity-30" />
                     <p className="text-sm">Выберите чат</p>
@@ -1409,60 +1535,62 @@ export default function App() {
           };
           return (
             <div className="flex flex-1 overflow-hidden">
-              <div className="w-72 flex flex-col border-r border-[#1a2332] bg-[#0a1120] flex-shrink-0">
-                <div className="px-4 pt-4 pb-3 border-b border-[#1a2332]">
+              <div className="w-72 flex flex-col border-r flex-shrink-0" style={{ borderColor: "var(--t-border)", background: "var(--t-bg-main)" }}>
+                <div className="px-4 pt-4 pb-3 border-b" style={{ borderColor: "var(--t-border)" }}>
                   <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-xs font-semibold text-[#e2e8f0] tracking-widest uppercase">Контакты</h2>
-                    <span className="text-[10px] text-[#4a5568]">{contacts.length}</span>
+                    <h2 className="text-xs font-semibold tracking-widest uppercase" style={{ color: "var(--t-text)" }}>Контакты</h2>
+                    <span className="text-[10px]" style={{ color: "var(--t-text-dim)" }}>{contacts.length}</span>
                   </div>
                   <div className="relative">
-                    <Icon name="Search" size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#4a5568]" />
-                    <input value={contactSearch} onChange={e => setContactSearch(e.target.value)} placeholder="Поиск..." className="w-full bg-[#111827] border border-[#1a2332] rounded-sm pl-7 pr-3 py-1.5 text-xs text-[#94a3b8] placeholder-[#4a5568] focus:outline-none focus:border-[#4a9eff]" />
+                    <Icon name="Search" size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--t-text-dim)" }} />
+                    <input value={contactSearch} onChange={e => setContactSearch(e.target.value)} placeholder="Поиск..."
+                      className="w-full rounded-sm pl-7 pr-3 py-1.5 text-xs placeholder-[#4a5568] focus:outline-none"
+                      style={{ background: "var(--t-bg-active)", border: "1px solid var(--t-border)", color: "var(--t-text-muted)" }} />
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto">
                   {filtered.map(c => (
-                    <div key={c.id} className="flex items-center gap-3 px-4 py-3 border-b border-[#0d1421] hover:bg-[#0e1627] cursor-pointer transition-colors">
+                    <div key={c.id} className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors" style={{ borderBottom: "1px solid var(--t-bg-panel)" }}>
                       <AvatarBadge initials={c.avatar_initials} online={c.online} />
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-medium text-[#e2e8f0] truncate">{c.display_name}</div>
-                        <div className="text-[11px] text-[#4a5568] truncate">{c.position || c.department}</div>
+                        <div className="text-xs font-medium truncate" style={{ color: "var(--t-text)" }}>{c.display_name}</div>
+                        <div className="text-[11px] truncate" style={{ color: "var(--t-text-dim)" }}>{c.position || c.department}</div>
                       </div>
                     </div>
                   ))}
                   {filtered.length === 0 && (
-                    <div className="p-4 text-xs text-[#4a5568] text-center">Ничего не найдено</div>
+                    <div className="p-4 text-xs text-center" style={{ color: "var(--t-text-dim)" }}>Ничего не найдено</div>
                   )}
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto px-8 py-6">
                 <div className="flex items-center justify-between mb-5 max-w-2xl">
-                  <h3 className="text-[10px] font-semibold text-[#4a5568] tracking-widest uppercase">Все сотрудники ({filtered.length})</h3>
+                  <h3 className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: "var(--t-text-dim)" }}>Все сотрудники ({filtered.length})</h3>
                   <div className="flex gap-2">
-                    <button onClick={importFromPhone} className="px-3 py-1.5 text-[10px] bg-[#1a2332] border border-[#2a3548] rounded-sm text-[#94a3b8] hover:border-[#4a9eff] hover:text-[#4a9eff] transition-colors flex items-center gap-1.5">
+                    <button onClick={importFromPhone} className="px-3 py-1.5 text-[10px] rounded-sm transition-colors flex items-center gap-1.5" style={{ background: "var(--t-border)", border: "1px solid var(--t-border-md)", color: "var(--t-text-muted)" }}>
                       <Icon name="Smartphone" size={11} /> Импорт
                     </button>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3 max-w-2xl">
                   {filtered.map(c => (
-                    <div key={c.id} className="bg-[#0a1120] border border-[#1a2332] rounded-sm p-4 hover:border-[#2a3548] transition-colors">
+                    <div key={c.id} className="rounded-sm p-4 transition-colors" style={{ background: "var(--t-bg-main)", border: "1px solid var(--t-border)" }}>
                       <div className="flex items-center gap-3 mb-3">
                         <AvatarBadge initials={c.avatar_initials} size="lg" online={c.online} />
                         <div className="min-w-0">
-                          <div className="text-sm font-medium text-[#e2e8f0] truncate">{c.display_name}</div>
-                          <div className="text-[11px] text-[#4a9eff] truncate">{c.department}</div>
+                          <div className="text-sm font-medium truncate" style={{ color: "var(--t-text)" }}>{c.display_name}</div>
+                          <div className="text-[11px] truncate" style={{ color: "var(--t-accent)" }}>{c.department}</div>
                         </div>
                       </div>
-                      {c.position && <div className="text-[11px] text-[#4a5568] mb-1">{c.position}</div>}
+                      {c.position && <div className="text-[11px] mb-1" style={{ color: "var(--t-text-dim)" }}>{c.position}</div>}
                       <div className="flex gap-1.5 mt-3">
-                        <button onClick={() => openChatWith(c.id)} className="flex-1 py-1.5 text-[10px] bg-[#1a2332] border border-[#2a3548] rounded-sm text-[#94a3b8] hover:border-[#4a9eff] hover:text-[#4a9eff] transition-colors flex items-center justify-center gap-1">
+                        <button onClick={() => openChatWith(c.id)} className="flex-1 py-1.5 text-[10px] rounded-sm transition-colors flex items-center justify-center gap-1" style={{ background: "var(--t-border)", border: "1px solid var(--t-border-md)", color: "var(--t-text-muted)" }}>
                           <Icon name="MessageSquare" size={11} /> Чат
                         </button>
-                        <button onClick={() => startCall(c, "audio")} className="flex-1 py-1.5 text-[10px] bg-[#1a2332] border border-[#2a3548] rounded-sm text-[#94a3b8] hover:border-[#22c55e] hover:text-[#22c55e] transition-colors flex items-center justify-center gap-1">
+                        <button onClick={() => startCall(c, "audio")} className="flex-1 py-1.5 text-[10px] rounded-sm transition-colors flex items-center justify-center gap-1" style={{ background: "var(--t-border)", border: "1px solid var(--t-border-md)", color: "var(--t-text-muted)" }}>
                           <Icon name="Phone" size={11} /> Звонок
                         </button>
-                        <button onClick={() => startCall(c, "video")} className="flex-1 py-1.5 text-[10px] bg-[#1a2332] border border-[#2a3548] rounded-sm text-[#94a3b8] hover:border-[#a78bfa] hover:text-[#a78bfa] transition-colors flex items-center justify-center gap-1">
+                        <button onClick={() => startCall(c, "video")} className="flex-1 py-1.5 text-[10px] rounded-sm transition-colors flex items-center justify-center gap-1" style={{ background: "var(--t-border)", border: "1px solid var(--t-border-md)", color: "var(--t-text-muted)" }}>
                           <Icon name="Video" size={11} /> Видео
                         </button>
                       </div>
@@ -1477,44 +1605,44 @@ export default function App() {
         {/* CALLS */}
         {section === "calls" && (
           <div className="flex flex-1 overflow-hidden">
-            <div className="w-80 flex flex-col border-r border-[#1a2332] bg-[#0a1120] flex-shrink-0">
-              <div className="px-4 pt-4 pb-3 border-b border-[#1a2332] flex items-center justify-between">
-                <h2 className="text-xs font-semibold text-[#e2e8f0] tracking-widest uppercase">Звонки</h2>
-                {loadingCalls && <div className="w-3 h-3 border border-[#4a9eff] border-t-transparent rounded-full animate-spin" />}
+            <div className="w-80 flex flex-col border-r flex-shrink-0" style={{ borderColor: "var(--t-border)", background: "var(--t-bg-main)" }}>
+              <div className="px-4 pt-4 pb-3 border-b flex items-center justify-between" style={{ borderColor: "var(--t-border)" }}>
+                <h2 className="text-xs font-semibold tracking-widest uppercase" style={{ color: "var(--t-text)" }}>Звонки</h2>
+                {loadingCalls && <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--t-accent)", borderTopColor: "transparent" }} />}
               </div>
               <div className="flex-1 overflow-y-auto">
                 {callHistory.map(call => (
-                  <div key={call.id} className="flex items-center gap-3 px-4 py-3 border-b border-[#0d1421] hover:bg-[#0e1627] cursor-pointer transition-colors">
+                  <div key={call.id} className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors" style={{ borderBottom: "1px solid var(--t-bg-panel)" }}>
                     <AvatarBadge initials={call.avatar} />
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium text-[#e2e8f0]">{call.name}</div>
+                      <div className="text-xs font-medium" style={{ color: "var(--t-text)" }}>{call.name}</div>
                       <div className="flex items-center gap-1 mt-0.5">
                         <Icon name={call.type === "incoming" ? "PhoneIncoming" : call.type === "outgoing" ? "PhoneOutgoing" : "PhoneMissed"} size={11}
-                          className={call.type === "missed" ? "text-[#f87171]" : call.type === "incoming" ? "text-[#22c55e]" : "text-[#4a9eff]"} />
-                        <span className="text-[10px] text-[#4a5568]">{call.time}</span>
-                        {call.is_video && <Icon name="Video" size={10} className="text-[#4a5568] ml-1" />}
+                          style={{ color: call.type === "missed" ? "#f87171" : call.type === "incoming" ? "#22c55e" : "var(--t-accent)" }} />
+                        <span className="text-[10px]" style={{ color: "var(--t-text-dim)" }}>{call.time}</span>
+                        {call.is_video && <Icon name="Video" size={10} className="ml-1" style={{ color: "var(--t-text-dim)" }} />}
                       </div>
                     </div>
-                    <span className="text-[10px] font-mono text-[#4a5568]">{call.duration}</span>
+                    <span className="text-[10px] font-mono" style={{ color: "var(--t-text-dim)" }}>{call.duration}</span>
                   </div>
                 ))}
                 {callHistory.length === 0 && !loadingCalls && (
-                  <div className="p-4 text-xs text-[#4a5568] text-center">История пуста</div>
+                  <div className="p-4 text-xs text-center" style={{ color: "var(--t-text-dim)" }}>История пуста</div>
                 )}
               </div>
             </div>
             <div className="flex-1 flex flex-col items-center justify-center gap-6">
               <div className="text-center">
-                <div className="w-20 h-20 rounded-full bg-[#0a1120] border border-[#1a2332] flex items-center justify-center mx-auto mb-4">
-                  <Icon name="Phone" size={32} className="text-[#4a5568]" />
+                <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "var(--t-bg-main)", border: "1px solid var(--t-border)" }}>
+                  <Icon name="Phone" size={32} style={{ color: "var(--t-text-dim)" }} />
                 </div>
-                <p className="text-sm font-medium text-[#e2e8f0] mb-1">Новый звонок</p>
-                <p className="text-xs text-[#4a5568] mb-5">Выберите контакт для звонка</p>
+                <p className="text-sm font-medium mb-1" style={{ color: "var(--t-text)" }}>Новый звонок</p>
+                <p className="text-xs mb-5" style={{ color: "var(--t-text-dim)" }}>Выберите контакт для звонка</p>
                 <div className="flex gap-2 justify-center">
                   {contacts.slice(0, 4).map(c => (
-                    <button key={c.id} onClick={() => startCall(c, "audio")} className="flex flex-col items-center gap-1.5 p-2 rounded-sm hover:bg-[#1a2332] transition-colors">
+                    <button key={c.id} onClick={() => startCall(c, "audio")} className="flex flex-col items-center gap-1.5 p-2 rounded-sm transition-colors">
                       <AvatarBadge initials={c.avatar_initials} online={c.online} />
-                      <span className="text-[10px] text-[#94a3b8] max-w-[48px] truncate">{c.display_name.split(" ")[0]}</span>
+                      <span className="text-[10px] max-w-[48px] truncate" style={{ color: "var(--t-text-muted)" }}>{c.display_name.split(" ")[0]}</span>
                     </button>
                   ))}
                 </div>
@@ -1523,7 +1651,7 @@ export default function App() {
                 <button onClick={() => { setSection("contacts"); }} className="px-4 py-2 bg-[#22c55e] text-[#080f1a] text-xs font-medium rounded-sm hover:bg-[#16a34a] transition-colors flex items-center gap-1.5">
                   <Icon name="Phone" size={13} /> Аудиозвонок
                 </button>
-                <button onClick={() => { setSection("contacts"); }} className="px-4 py-2 bg-[#4a9eff] text-[#080f1a] text-xs font-medium rounded-sm hover:bg-[#3b8fe0] transition-colors flex items-center gap-1.5">
+                <button onClick={() => { setSection("contacts"); }} className="px-4 py-2 text-xs font-medium rounded-sm transition-colors flex items-center gap-1.5" style={{ background: "var(--t-accent)", color: "var(--t-bg-deep)" }}>
                   <Icon name="Video" size={13} /> Видеозвонок
                 </button>
               </div>
@@ -1534,20 +1662,20 @@ export default function App() {
         {/* VIDEO */}
         {section === "video" && (
           <div className="flex flex-1 overflow-hidden">
-            <div className="w-72 flex flex-col border-r border-[#1a2332] bg-[#0a1120] flex-shrink-0">
-              <div className="px-4 pt-4 pb-3 border-b border-[#1a2332]">
-                <h2 className="text-xs font-semibold text-[#e2e8f0] tracking-widest uppercase mb-3">Видеозвонок</h2>
-                <p className="text-[11px] text-[#4a5568]">Выберите контакт</p>
+            <div className="w-72 flex flex-col border-r flex-shrink-0" style={{ borderColor: "var(--t-border)", background: "var(--t-bg-main)" }}>
+              <div className="px-4 pt-4 pb-3 border-b" style={{ borderColor: "var(--t-border)" }}>
+                <h2 className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: "var(--t-text)" }}>Видеозвонок</h2>
+                <p className="text-[11px]" style={{ color: "var(--t-text-dim)" }}>Выберите контакт</p>
               </div>
               <div className="flex-1 overflow-y-auto">
                 {contacts.map(c => (
-                  <div key={c.id} className="flex items-center gap-3 px-4 py-3 border-b border-[#0d1421] hover:bg-[#0e1627] cursor-pointer transition-colors" onClick={() => startCall(c, "video")}>
+                  <div key={c.id} className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors" style={{ borderBottom: "1px solid var(--t-bg-panel)" }} onClick={() => startCall(c, "video")}>
                     <AvatarBadge initials={c.avatar_initials} online={c.online} />
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium text-[#e2e8f0] truncate">{c.display_name}</div>
-                      <div className="text-[11px] text-[#4a5568] truncate">{c.department}</div>
+                      <div className="text-xs font-medium truncate" style={{ color: "var(--t-text)" }}>{c.display_name}</div>
+                      <div className="text-[11px] truncate" style={{ color: "var(--t-text-dim)" }}>{c.department}</div>
                     </div>
-                    <Icon name="Video" size={14} className="text-[#4a5568]" />
+                    <Icon name="Video" size={14} style={{ color: "var(--t-text-dim)" }} />
                   </div>
                 ))}
               </div>
@@ -1573,11 +1701,11 @@ export default function App() {
                 </div>
               ) : (
                 <div className="text-center max-w-xs">
-                  <div className="w-20 h-20 rounded-full bg-[#0a1120] border border-[#1a2332] flex items-center justify-center mx-auto mb-4">
-                    <Icon name="Video" size={32} className="text-[#4a5568]" />
+                  <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "var(--t-bg-main)", border: "1px solid var(--t-border)" }}>
+                    <Icon name="Video" size={32} style={{ color: "var(--t-text-dim)" }} />
                   </div>
-                  <h3 className="text-sm font-semibold text-[#e2e8f0] mb-2">Видеозвонки</h3>
-                  <p className="text-xs text-[#4a5568]">Выберите контакт слева для начала видеозвонка</p>
+                  <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--t-text)" }}>Видеозвонки</h3>
+                  <p className="text-xs" style={{ color: "var(--t-text-dim)" }}>Выберите контакт слева для начала видеозвонка</p>
                 </div>
               )}
             </div>
@@ -1587,33 +1715,33 @@ export default function App() {
         {/* FILES */}
         {section === "files" && (
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="px-6 pt-5 pb-4 border-b border-[#1a2332] flex items-center justify-between flex-shrink-0">
+            <div className="px-6 pt-5 pb-4 border-b flex items-center justify-between flex-shrink-0" style={{ borderColor: "var(--t-border)" }}>
               <div>
-                <h2 className="text-xs font-semibold text-[#e2e8f0] tracking-widest uppercase">Файлы</h2>
-                <p className="text-xs text-[#4a5568] mt-0.5">Все файлы переписок</p>
+                <h2 className="text-xs font-semibold tracking-widest uppercase" style={{ color: "var(--t-text)" }}>Файлы</h2>
+                <p className="text-xs mt-0.5" style={{ color: "var(--t-text-dim)" }}>Все файлы переписок</p>
               </div>
-              <button className="px-3 py-1.5 bg-[#4a9eff] text-[#080f1a] text-xs font-medium rounded-sm hover:bg-[#3b8fe0] transition-colors flex items-center gap-1.5">
+              <button className="px-3 py-1.5 text-xs font-medium rounded-sm transition-colors flex items-center gap-1.5" style={{ background: "var(--t-accent)", color: "var(--t-bg-deep)" }}>
                 <Icon name="Upload" size={12} /> Загрузить
               </button>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-4">
-              <div className="border border-[#1a2332] rounded-sm overflow-hidden">
+              <div className="rounded-sm overflow-hidden" style={{ border: "1px solid var(--t-border)" }}>
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-[#1a2332] bg-[#0a1120]">
+                    <tr className="border-b" style={{ borderColor: "var(--t-border)", background: "var(--t-bg-main)" }}>
                       {["Имя файла", "Размер", "Отправитель", "Дата", ""].map(h => (
-                        <th key={h} className="text-left px-4 py-2.5 text-[10px] font-semibold text-[#4a5568] tracking-widest uppercase">{h}</th>
+                        <th key={h} className="text-left px-4 py-2.5 text-[10px] font-semibold tracking-widest uppercase" style={{ color: "var(--t-text-dim)" }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {STATIC_FILES.map(f => (
-                      <tr key={f.id} className="border-b border-[#0d1421] hover:bg-[#0e1627] transition-colors">
-                        <td className="px-4 py-3"><div className="flex items-center gap-2.5"><FileIconComp type={f.type} /><span className="text-xs text-[#e2e8f0] font-medium">{f.name}</span></div></td>
-                        <td className="px-4 py-3 text-xs font-mono text-[#4a5568]">{f.size}</td>
-                        <td className="px-4 py-3 text-xs text-[#94a3b8]">{f.sender}</td>
-                        <td className="px-4 py-3 text-xs text-[#4a5568]">{f.date}</td>
-                        <td className="px-4 py-3"><button className="text-[#4a5568] hover:text-[#4a9eff] transition-colors"><Icon name="Download" size={14} /></button></td>
+                      <tr key={f.id} className="transition-colors" style={{ borderBottom: "1px solid var(--t-bg-panel)" }}>
+                        <td className="px-4 py-3"><div className="flex items-center gap-2.5"><FileIconComp type={f.type} /><span className="text-xs font-medium" style={{ color: "var(--t-text)" }}>{f.name}</span></div></td>
+                        <td className="px-4 py-3 text-xs font-mono" style={{ color: "var(--t-text-dim)" }}>{f.size}</td>
+                        <td className="px-4 py-3 text-xs" style={{ color: "var(--t-text-muted)" }}>{f.sender}</td>
+                        <td className="px-4 py-3 text-xs" style={{ color: "var(--t-text-dim)" }}>{f.date}</td>
+                        <td className="px-4 py-3"><button className="transition-colors" style={{ color: "var(--t-text-dim)" }}><Icon name="Download" size={14} /></button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1626,33 +1754,33 @@ export default function App() {
         {/* BOTS */}
         {section === "bots" && (
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="px-6 pt-5 pb-4 border-b border-[#1a2332] flex items-center justify-between flex-shrink-0">
+            <div className="px-6 pt-5 pb-4 border-b flex items-center justify-between flex-shrink-0" style={{ borderColor: "var(--t-border)" }}>
               <div>
-                <h2 className="text-xs font-semibold text-[#e2e8f0] tracking-widest uppercase">Боты</h2>
-                <p className="text-xs text-[#4a5568] mt-0.5">Корпоративные автоматизации</p>
+                <h2 className="text-xs font-semibold tracking-widest uppercase" style={{ color: "var(--t-text)" }}>Боты</h2>
+                <p className="text-xs mt-0.5" style={{ color: "var(--t-text-dim)" }}>Корпоративные автоматизации</p>
               </div>
-              <button className="px-3 py-1.5 bg-[#4a9eff] text-[#080f1a] text-xs font-medium rounded-sm hover:bg-[#3b8fe0] transition-colors flex items-center gap-1.5">
+              <button className="px-3 py-1.5 text-xs font-medium rounded-sm transition-colors flex items-center gap-1.5" style={{ background: "var(--t-accent)", color: "var(--t-bg-deep)" }}>
                 <Icon name="Plus" size={12} /> Создать бота
               </button>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-5">
               <div className="grid grid-cols-3 gap-4">
                 {STATIC_BOTS.map(bot => (
-                  <div key={bot.id} className="bg-[#0a1120] border border-[#1a2332] rounded-sm p-4 hover:border-[#2a3548] transition-colors">
+                  <div key={bot.id} className="rounded-sm p-4 transition-colors" style={{ background: "var(--t-bg-main)", border: "1px solid var(--t-border)" }}>
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-10 h-10 rounded-sm bg-[#1a2332] border border-[#2a3548] flex items-center justify-center text-[#4a9eff] text-xs font-medium">{bot.avatar}</div>
+                        <div className="w-10 h-10 rounded-sm flex items-center justify-center text-xs font-medium" style={{ background: "var(--t-border)", border: "1px solid var(--t-border-md)", color: "var(--t-accent)" }}>{bot.avatar}</div>
                         <div>
-                          <div className="text-xs font-medium text-[#e2e8f0]">{bot.name}</div>
-                          <div className="text-[10px] text-[#4a9eff]">{bot.category}</div>
+                          <div className="text-xs font-medium" style={{ color: "var(--t-text)" }}>{bot.name}</div>
+                          <div className="text-[10px]" style={{ color: "var(--t-accent)" }}>{bot.category}</div>
                         </div>
                       </div>
-                      <div className={`w-2 h-2 rounded-full mt-1 ${bot.active ? "bg-[#22c55e]" : "bg-[#4a5568]"}`} />
+                      <div className="w-2 h-2 rounded-full mt-1" style={{ background: bot.active ? "#22c55e" : "var(--t-text-dim)" }} />
                     </div>
-                    <p className="text-[11px] text-[#4a5568] leading-relaxed mb-3">{bot.description}</p>
+                    <p className="text-[11px] leading-relaxed mb-3" style={{ color: "var(--t-text-dim)" }}>{bot.description}</p>
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono text-[#4a5568]">{bot.requests.toLocaleString()} запросов</span>
-                      <button className="text-[10px] text-[#4a9eff] hover:text-[#7ab8ff] transition-colors">Открыть →</button>
+                      <span className="text-[10px] font-mono" style={{ color: "var(--t-text-dim)" }}>{bot.requests.toLocaleString()} запросов</span>
+                      <button className="text-[10px] transition-colors" style={{ color: "var(--t-accent)" }}>Открыть →</button>
                     </div>
                   </div>
                 ))}
@@ -1674,39 +1802,39 @@ export default function App() {
         {/* ANALYTICS */}
         {section === "analytics" && (
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="px-6 pt-5 pb-4 border-b border-[#1a2332] flex items-center justify-between flex-shrink-0">
+            <div className="px-6 pt-5 pb-4 border-b flex items-center justify-between flex-shrink-0" style={{ borderColor: "var(--t-border)" }}>
               <div>
-                <h2 className="text-xs font-semibold text-[#e2e8f0] tracking-widest uppercase">Аналитика</h2>
-                <p className="text-xs text-[#4a5568] mt-0.5">Панель администратора</p>
+                <h2 className="text-xs font-semibold tracking-widest uppercase" style={{ color: "var(--t-text)" }}>Аналитика</h2>
+                <p className="text-xs mt-0.5" style={{ color: "var(--t-text-dim)" }}>Панель администратора</p>
               </div>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-5">
               <div className="grid grid-cols-4 gap-3 mb-5">
                 {[
-                  { label: "Активных пользователей", value: String(contacts.filter(c => c.online).length + 1), icon: "Users", color: "text-[#4a9eff]" },
-                  { label: "Сообщений в системе", value: String(messages.length), icon: "MessageSquare", color: "text-[#22c55e]" },
-                  { label: "Активных чатов", value: String(chats.length), icon: "Hash", color: "text-[#f59e0b]" },
-                  { label: "Ботов запущено", value: String(STATIC_BOTS.filter(b => b.active).length), icon: "Bot", color: "text-[#a78bfa]" },
+                  { label: "Активных пользователей", value: String(contacts.filter(c => c.online).length + 1), icon: "Users", color: "var(--t-accent)" },
+                  { label: "Сообщений в системе", value: String(messages.length), icon: "MessageSquare", color: "#22c55e" },
+                  { label: "Активных чатов", value: String(chats.length), icon: "Hash", color: "#f59e0b" },
+                  { label: "Ботов запущено", value: String(STATIC_BOTS.filter(b => b.active).length), icon: "Bot", color: "#a78bfa" },
                 ].map(kpi => (
-                  <div key={kpi.label} className="bg-[#0a1120] border border-[#1a2332] rounded-sm p-4">
+                  <div key={kpi.label} className="rounded-sm p-4" style={{ background: "var(--t-bg-main)", border: "1px solid var(--t-border)" }}>
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-[10px] text-[#4a5568] uppercase tracking-wide leading-tight">{kpi.label}</span>
-                      <Icon name={kpi.icon} size={14} className={kpi.color} />
+                      <span className="text-[10px] uppercase tracking-wide leading-tight" style={{ color: "var(--t-text-dim)" }}>{kpi.label}</span>
+                      <Icon name={kpi.icon} size={14} style={{ color: kpi.color }} />
                     </div>
-                    <div className="text-2xl font-semibold text-[#e2e8f0] font-mono">{kpi.value}</div>
+                    <div className="text-2xl font-semibold font-mono" style={{ color: "var(--t-text)" }}>{kpi.value}</div>
                   </div>
                 ))}
               </div>
-              <div className="bg-[#0a1120] border border-[#1a2332] rounded-sm p-4">
-                <h4 className="text-xs font-semibold text-[#e2e8f0] mb-4">Пользователи</h4>
+              <div className="rounded-sm p-4" style={{ background: "var(--t-bg-main)", border: "1px solid var(--t-border)" }}>
+                <h4 className="text-xs font-semibold mb-4" style={{ color: "var(--t-text)" }}>Пользователи</h4>
                 <div className="space-y-2.5">
                   {contacts.slice(0, 5).map((c, i) => (
                     <div key={c.id} className="flex items-center gap-3">
-                      <span className="text-[10px] font-mono text-[#4a5568] w-4">{i + 1}</span>
+                      <span className="text-[10px] font-mono w-4" style={{ color: "var(--t-text-dim)" }}>{i + 1}</span>
                       <AvatarBadge initials={c.avatar_initials} size="sm" online={c.online} />
-                      <div className="flex-1 text-xs text-[#e2e8f0]">{c.display_name}</div>
-                      <span className="text-[11px] text-[#4a9eff]">{c.department}</span>
-                      <span className={`text-[10px] ${c.online ? "text-[#22c55e]" : "text-[#4a5568]"}`}>{c.online ? "В сети" : "Не в сети"}</span>
+                      <div className="flex-1 text-xs" style={{ color: "var(--t-text)" }}>{c.display_name}</div>
+                      <span className="text-[11px]" style={{ color: "var(--t-accent)" }}>{c.department}</span>
+                      <span className="text-[10px]" style={{ color: c.online ? "#22c55e" : "var(--t-text-dim)" }}>{c.online ? "В сети" : "Не в сети"}</span>
                     </div>
                   ))}
                 </div>
@@ -1797,5 +1925,13 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppInner />
+    </ThemeProvider>
   );
 }
