@@ -256,3 +256,188 @@ body[data-theme="teal"] {
   --t-chat-bg: #071413;
   --t-chat-pattern: none;
 }
+
+/* ===== ГЛОБАЛЬНЫЕ СТИЛИ ПРИЛОЖЕНИЯ ===== */
+
+* {
+  box-sizing: border-box;
+}
+
+/* Красивый скроллбар */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--t-border, #1a2332);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--t-border-md, #2a3548);
+}
+
+/* Шрифт по умолчанию */
+body[data-theme] {
+  font-family: "Space Grotesk", "IBM Plex Sans", sans-serif;
+}
+
+/* ===== ГЛОБАЛЬНЫЕ АНИМАЦИИ ===== */
+@keyframes badgePulse {
+  0%,
+  100% {
+    box-shadow: 0 0 6px var(--t-accent);
+  }
+  50% {
+    box-shadow:
+      0 0 14px var(--t-accent),
+      0 0 24px color-mix(in srgb, var(--t-accent) 40%, transparent);
+  }
+}
+@keyframes iconLive {
+  0%,
+  100% {
+    filter: drop-shadow(
+      0 0 3px color-mix(in srgb, var(--t-accent) 60%, transparent)
+    );
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 8px var(--t-accent));
+    transform: scale(1.08);
+  }
+}
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes glowPulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes appStarBlink {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.3);
+  }
+}
+@keyframes appStarFlare {
+  0%,
+  100% {
+    opacity: 0.2;
+    box-shadow: 0 0 3px 1px color-mix(in srgb, var(--t-accent) 60%, transparent);
+  }
+  50% {
+    opacity: 1;
+    box-shadow:
+      0 0 10px 3px var(--t-accent),
+      0 0 20px 6px color-mix(in srgb, var(--t-accent) 30%, transparent);
+  }
+}
+@keyframes msgIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes navGlow {
+  0%,
+  100% {
+    box-shadow: none;
+  }
+  50% {
+    box-shadow: inset 2px 0 12px
+      color-mix(in srgb, var(--t-accent) 20%, transparent);
+  }
+}
+@keyframes card3dFloat {
+  0%,
+  100% {
+    transform: perspective(800px) rotateX(1deg) translateY(0);
+  }
+  50% {
+    transform: perspective(800px) rotateX(1.5deg) translateY(-2px);
+  }
+}
+
+/* Hover для кнопок 3D */
+.btn-3d:hover {
+  transform: perspective(200px) rotateX(4deg) translateY(-2px) !important;
+  filter: brightness(1.1);
+}
+.btn-3d:active {
+  transform: perspective(200px) rotateX(2deg) translateY(2px) !important;
+  filter: brightness(0.95);
+}
+
+/* Сообщения — красивый шрифт */
+.msg-text {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 13.5px;
+  line-height: 1.65;
+  letter-spacing: 0.01em;
+}
+.msg-time {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  opacity: 0.5;
+}
+.msg-sender {
+  font-family: "Rajdhani", sans-serif;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Nav item active glow */
+.nav-item-active {
+  animation: navGlow 3s ease-in-out infinite;
+}
+
+/* Карточки с 3D float */
+.card-float {
+  animation: card3dFloat 6s ease-in-out infinite;
+}
