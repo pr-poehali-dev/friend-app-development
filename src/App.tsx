@@ -1554,8 +1554,8 @@ function AppInner() {
     file: File,
     contextKey: string  // "chat:{id}" или "store"
   ): Promise<{ message?: unknown; file?: unknown } | null> => {
-    // 200KB бинарных = ~267KB base64 + JSON overhead — безопасно в пределах 512KB лимита
-    const CHUNK_SIZE = 200 * 1024;
+    // 100KB бинарных = ~133KB base64 + JSON overhead — безопасно
+    const CHUNK_SIZE = 100 * 1024;
     const MAX_MB = 50;
     if (file.size > MAX_MB * 1024 * 1024) {
       showToast("Файл слишком большой", `Максимальный размер файла — ${MAX_MB} МБ`, "error");
@@ -1578,15 +1578,23 @@ function AppInner() {
     };
 
     // 1. init
-    const initRes = await fetch(`${API.fileUpload}/init`, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify({
-        file_name: file.name,
-        file_size: file.size,
-        context_key: contextKey,
-      }),
-    });
+    console.log("[upload] init start, url:", `${API.fileUpload}/init`, "token:", sessionToken ? "ok" : "EMPTY");
+    let initRes: Response;
+    try {
+      initRes = await fetch(`${API.fileUpload}/init`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          file_name: file.name,
+          file_size: file.size,
+          context_key: contextKey,
+        }),
+      });
+    } catch (fetchErr) {
+      console.error("[upload] init fetch threw:", fetchErr);
+      throw fetchErr;
+    }
+    console.log("[upload] init status:", initRes.status);
     if (!initRes.ok) {
       const err = await initRes.json().catch(() => ({}));
       throw new Error(err.error || `init failed: ${initRes.status}`);
@@ -1643,27 +1651,7 @@ function AppInner() {
     setUploadProgress(10);
     try {
       let result: { message?: unknown; file?: unknown } | null = null;
-      if (file.size <= 500 * 1024) {
-        // Быстрая загрузка для файлов до 500КБ
-        const ab = await file.arrayBuffer();
-        const bytes = new Uint8Array(ab);
-        let binary = "";
-        for (let k = 0; k < bytes.byteLength; k++) binary += String.fromCharCode(bytes[k]);
-        const b64 = btoa(binary);
-        setUploadProgress(50);
-        const res = await fetch(`${API.fileUpload}/upload`, {
-          method: "POST",
-          headers: authHeaders(),
-          body: JSON.stringify({ chat_id: activeChat.id, file_name: file.name, file_data: b64 }),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.error || `upload failed: ${res.status}`);
-        }
-        result = await res.json();
-      } else {
-        result = await uploadFileChunked(file, `chat:${activeChat.id}`);
-      }
+      result = await uploadFileChunked(file, `chat:${activeChat.id}`);
       setUploadProgress(100);
       if (result?.message) {
         setMessages(prev => [...prev, result!.message as never]);
