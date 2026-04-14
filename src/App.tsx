@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, createContext, useContext } from "react";
+import { useState, useEffect, useCallback, createContext, useContext, useRef } from "react";
 import Icon from "@/components/ui/icon";
 import { FONT, card3d, btn3d, heading3d, liveIcon, msgOwn, msgOther } from "@/styles/theme3d";
 import AddContactModal from "@/components/contacts/AddContactModal";
@@ -8,6 +8,7 @@ import NotificationToast, { type AppNotification } from "@/components/ui/Notific
 import { useLang } from "@/LangContext";
 import LanguageSwitcher from "@/components/ui/LanguageSwitcher";
 import CallWindow from "@/components/CallWindow";
+import EmojiPicker from "@/components/EmojiPicker";
 
 // ===== THEME =====
 export type ThemeId = "dark-blue" | "whatsapp" | "telegram" | "light" | "purple" | "slate" | "teal";
@@ -1304,6 +1305,7 @@ function AppInner() {
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [msgInput, setMsgInput] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [loadingChats, setLoadingChats] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -2389,17 +2391,46 @@ function AppInner() {
                         </div>
                       </div>
                     )}
-                    <div className="flex items-center gap-2 px-3 py-2" style={{ background: "var(--t-bg-panel)", border: "1px solid var(--t-border)", borderRadius: 14, boxShadow: "0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)" }}>
+                    <div className="flex items-center gap-2 px-3 py-2" style={{ position: "relative", background: "var(--t-bg-panel)", border: "1px solid var(--t-border)", borderRadius: 14, boxShadow: "0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)" }}>
+                      {/* Emoji picker portal */}
+                      {showEmojiPicker && (
+                        <EmojiPicker
+                          onEmojiSelect={emoji => setMsgInput(prev => prev + emoji)}
+                          onStickerSelect={sticker => {
+                            setMsgInput(prev => prev + sticker);
+                            setShowEmojiPicker(false);
+                          }}
+                          onClose={() => setShowEmojiPicker(false)}
+                        />
+                      )}
+                      {/* Attach */}
                       <label className={`flex-shrink-0 transition-all ${uploadingFile ? "opacity-40 pointer-events-none" : "cursor-pointer"}`} style={liveIcon(1)}
                         title="Прикрепить файл (до 50 МБ)">
                         <Icon name="Paperclip" size={17} />
                         <input type="file" className="hidden" accept="*/*" disabled={uploadingFile}
                           onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ""; }} />
                       </label>
+                      {/* Emoji button */}
+                      <button
+                        onClick={() => setShowEmojiPicker(v => !v)}
+                        title="Эмодзи и стикеры"
+                        className="flex-shrink-0 transition-all"
+                        style={{
+                          fontSize: 18, lineHeight: 1, background: "transparent", border: "none",
+                          cursor: "pointer", padding: "2px 3px", borderRadius: 6,
+                          opacity: showEmojiPicker ? 1 : 0.65,
+                          filter: showEmojiPicker ? "drop-shadow(0 0 6px var(--t-accent))" : undefined,
+                          transition: "all 0.15s",
+                        }}>
+                        😊
+                      </button>
                       <input
                         value={msgInput}
                         onChange={e => setMsgInput(e.target.value)}
-                        onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                        onKeyDown={e => {
+                          if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+                          if (e.key === "Escape") setShowEmojiPicker(false);
+                        }}
                         placeholder={t("msg_placeholder")}
                         className="flex-1 bg-transparent focus:outline-none msg-text"
                         style={{ color: "var(--t-text)", fontFamily: FONT.body, fontSize: 13, letterSpacing: "0.01em" }}
