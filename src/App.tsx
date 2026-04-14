@@ -9,6 +9,7 @@ import { useLang } from "@/LangContext";
 import LanguageSwitcher from "@/components/ui/LanguageSwitcher";
 import CallWindow from "@/components/CallWindow";
 import EmojiPicker from "@/components/EmojiPicker";
+import CameraModal from "@/components/CameraModal";
 
 // ===== THEME =====
 export type ThemeId = "dark-blue" | "whatsapp" | "telegram" | "light" | "purple" | "slate" | "teal";
@@ -1340,6 +1341,7 @@ function AppInner() {
   const [callStatus, setCallStatus] = useState<"calling" | "ringing" | "active" | "error">("calling");
   const [callErrorMsg, setCallErrorMsg] = useState<string>("");
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
   const [userFiles, setUserFiles] = useState<{id:number;name:string;size:string;url:string;mime:string;date:string;sender:string}[]>([]);
   const [loadingUserFiles, setLoadingUserFiles] = useState(false);
   const [uploadingUserFile, setUploadingUserFile] = useState(false);
@@ -1638,11 +1640,33 @@ function AppInner() {
   const handleFileUpload = async (file: File) => {
     if (!activeChat || uploadingFile) return;
     setUploadingFile(true);
-    setUploadProgress(0);
+    setUploadProgress(10);
     try {
-      const result = await uploadFileChunked(file, `chat:${activeChat.id}`);
+      let result: { message?: unknown; file?: unknown } | null = null;
+      if (file.size <= 500 * 1024) {
+        // Быстрая загрузка для файлов до 500КБ
+        const ab = await file.arrayBuffer();
+        const bytes = new Uint8Array(ab);
+        let binary = "";
+        for (let k = 0; k < bytes.byteLength; k++) binary += String.fromCharCode(bytes[k]);
+        const b64 = btoa(binary);
+        setUploadProgress(50);
+        const res = await fetch(`${API.fileUpload}/upload`, {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({ chat_id: activeChat.id, file_name: file.name, file_data: b64 }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `upload failed: ${res.status}`);
+        }
+        result = await res.json();
+      } else {
+        result = await uploadFileChunked(file, `chat:${activeChat.id}`);
+      }
+      setUploadProgress(100);
       if (result?.message) {
-        setMessages(prev => [...prev, result.message as never]);
+        setMessages(prev => [...prev, result!.message as never]);
         loadChats();
       }
     } catch (e) {
@@ -1650,6 +1674,7 @@ function AppInner() {
       setUploadProgress(0);
     } finally {
       setUploadingFile(false);
+      setTimeout(() => setUploadProgress(0), 600);
     }
   };
 
@@ -2642,6 +2667,16 @@ function AppInner() {
                         <input type="file" className="hidden" accept="*/*" disabled={uploadingFile}
                           onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ""; }} />
                       </label>
+                      {/* Camera */}
+                      <button
+                        className={`flex-shrink-0 transition-all ${uploadingFile ? "opacity-40 pointer-events-none" : "cursor-pointer"}`}
+                        style={{ background: "transparent", border: "none", padding: 0, ...liveIcon(1) }}
+                        title="Сделать фото"
+                        disabled={uploadingFile}
+                        onClick={() => setShowCamera(true)}
+                      >
+                        <Icon name="Camera" size={17} />
+                      </button>
                       {/* Emoji button */}
                       <button
                         onClick={() => setShowEmojiPicker(v => !v)}
@@ -3966,6 +4001,17 @@ function AppInner() {
           onHangup={endCall}
           onToggleMic={toggleMic}
           onToggleCam={toggleCam}
+        />
+      )}
+
+      {/* Camera Modal */}
+      {showCamera && (
+        <CameraModal
+          onClose={() => setShowCamera(false)}
+          onPhoto={(file) => {
+            setShowCamera(false);
+            handleFileUpload(file);
+          }}
         />
       )}
     </div>
