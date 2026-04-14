@@ -211,64 +211,79 @@ function FileIconComp({ type }: { type: "doc" | "img" | "archive" | "audio" | "v
 // ============ EMAIL AUTH SCREEN ============
 type AuthStep = "login" | "forgot" | "email_code" | "register" | "reset_password";
 
+// ── Карточка формы: NO rotateX — он размывает текст внутри
 const FORM_CARD: React.CSSProperties = {
-  background: "rgba(8,3,0,0.92)",
-  border: "1px solid rgba(255,100,20,0.35)",
-  borderRadius: 20,
-  boxShadow: "0 0 50px rgba(255,80,0,0.2), 0 30px 60px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,160,60,0.2), inset 0 -1px 0 rgba(255,40,0,0.12)",
-  transform: "perspective(900px) rotateX(2deg) translateY(0)",
-  /* backdropFilter убран — он размывает текст внутри */
+  background: "#0e0500",
+  border: "2px solid rgba(255,120,20,0.7)",
+  borderRadius: 18,
+  boxShadow: [
+    "0 0 0 1px rgba(255,80,0,0.3)",          // внутренний обвод
+    "0 0 30px rgba(255,100,0,0.5)",           // ближнее свечение
+    "0 0 70px rgba(255,60,0,0.25)",           // дальнее свечение
+    "0 20px 50px rgba(0,0,0,0.8)",            // тень вниз
+    "inset 0 1px 0 rgba(255,180,60,0.25)",   // блик сверху
+  ].join(", "),
+  // transform убран полностью — rotateX размывает дочерний текст
   padding: "28px 28px 24px",
   position: "relative" as const,
 };
-const inputCls = "w-full rounded-xl px-4 py-3 focus:outline-none transition-all";
-const inputWithIconCls = "w-full rounded-xl pl-10 pr-4 py-3 focus:outline-none transition-all";
-// Стиль для текста внутри полей — чёткий, не размытый
-const INPUT_TEXT: React.CSSProperties = {
+
+// Поля ввода — чёткий текст, яркая обводка
+const INPUT_STYLE: React.CSSProperties = {
+  background: "rgba(255,255,255,0.05)",
+  border: "1.5px solid rgba(255,100,20,0.5)",
+  boxShadow: "inset 0 1px 4px rgba(0,0,0,0.6)",
   color: "#ffffff",
   fontSize: 14,
   fontFamily: "'Space Grotesk', sans-serif",
-  fontWeight: 400,
-  WebkitFontSmoothing: "antialiased" as const,
-  MozOsxFontSmoothing: "grayscale" as const,
-};
-const INPUT_STYLE: React.CSSProperties = {
-  background: "rgba(255,255,255,0.06)",
-  border: "1px solid rgba(255,100,20,0.3)",
-  boxShadow: "inset 0 2px 6px rgba(0,0,0,0.5)",
-  ...INPUT_TEXT,
+  fontWeight: 500,
 };
 const INPUT_FOCUS_STYLE: React.CSSProperties = {
-  background: "rgba(255,255,255,0.08)",
-  border: "1px solid rgba(255,160,50,0.6)",
-  boxShadow: "inset 0 2px 6px rgba(0,0,0,0.4), 0 0 0 3px rgba(255,120,0,0.15)",
-  ...INPUT_TEXT,
-};
-const BTN_STYLE: React.CSSProperties = {
-  width: "100%", padding: "13px", borderRadius: 12, fontFamily: "'Rajdhani', sans-serif",
-  fontWeight: 700, fontSize: 15, letterSpacing: "0.1em",
+  background: "rgba(255,130,0,0.08)",
+  border: "1.5px solid rgba(255,160,40,0.9)",
+  boxShadow: "inset 0 1px 4px rgba(0,0,0,0.4), 0 0 0 3px rgba(255,120,0,0.2), 0 0 16px rgba(255,100,0,0.3)",
   color: "#ffffff",
-  textShadow: "0 1px 3px rgba(0,0,0,0.5)",
-  WebkitFontSmoothing: "antialiased" as const,
+  fontSize: 14,
+  fontFamily: "'Space Grotesk', sans-serif",
+  fontWeight: 500,
+};
+const inputCls = "w-full rounded-xl px-4 py-3 focus:outline-none transition-all";
+const inputWithIconCls = "w-full rounded-xl pl-10 pr-4 py-3 focus:outline-none transition-all";
+
+// Кнопка — NO rotateX, яркое свечение
+const BTN_STYLE: React.CSSProperties = {
+  width: "100%",
+  padding: "14px",
+  borderRadius: 12,
+  fontFamily: "'Rajdhani', sans-serif",
+  fontWeight: 800,
+  fontSize: 16,
+  letterSpacing: "0.12em",
+  color: "#ffffff",
   cursor: "pointer",
-  background: "linear-gradient(135deg, #d44800 0%, #ff6600 40%, #ff9000 70%, #d44800 100%)",
-  backgroundSize: "200% 100%",
-  border: "1px solid rgba(255,140,0,0.4)",
-  boxShadow: "0 4px 0 #7a2200, 0 8px 20px rgba(255,80,0,0.35), inset 0 1px 0 rgba(255,200,100,0.25)",
-  transform: "perspective(200px) rotateX(6deg) translateY(0px)",
+  background: "linear-gradient(180deg, #ff7700 0%, #e85000 50%, #c43800 100%)",
+  border: "2px solid rgba(255,160,50,0.6)",
+  boxShadow: [
+    "0 0 0 1px rgba(255,80,0,0.4)",
+    "0 0 20px rgba(255,100,0,0.6)",
+    "0 0 50px rgba(255,60,0,0.3)",
+    "0 4px 0 #7a2000",
+    "inset 0 1px 0 rgba(255,220,100,0.35)",
+  ].join(", "),
+  // transform убран — без rotateX текст чёткий
   transition: "all 0.15s ease",
   position: "relative" as const,
 };
-const errBox = "flex items-center gap-2 text-[11px] rounded-xl px-3 py-2.5";
-const label = "block text-[10px] font-semibold uppercase tracking-widest mb-2";
+
+const errBox = "flex items-center gap-2 text-[12px] rounded-xl px-3 py-2.5";
+const label = "block text-[11px] font-bold uppercase tracking-widest mb-2";
 const LABEL_STYLE: React.CSSProperties = {
   fontFamily: "'Rajdhani', sans-serif",
-  color: "rgba(255,180,80,0.9)",
-  letterSpacing: "0.15em",
+  color: "#ffaa40",
+  letterSpacing: "0.18em",
   fontWeight: 700,
-  WebkitFontSmoothing: "antialiased" as const,
 };
-const ICON_STYLE: React.CSSProperties = { color: "rgba(255,140,50,0.9)" };
+const ICON_STYLE: React.CSSProperties = { color: "#ff9030" };
 
 function Spinner() {
   return <span className="w-4 h-4 border-2 rounded-full animate-spin inline-block" style={{ borderColor: "rgba(255,255,255,0.2)", borderTopColor: "#fff" }} />;
@@ -478,9 +493,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
             <div className="relative w-14 h-14 flex items-center justify-center" style={{
               background: "linear-gradient(145deg, #1a0a00, #2d1200)",
               borderRadius: "14px",
-              border: "1px solid rgba(255,120,30,0.5)",
-              boxShadow: "0 0 20px rgba(255,80,0,0.5), 0 0 60px rgba(255,40,0,0.2), inset 0 1px 0 rgba(255,160,80,0.3)",
-              transform: "perspective(200px) rotateX(5deg)",
+              border: "2px solid rgba(255,120,30,0.7)",
+              boxShadow: "0 0 20px rgba(255,80,0,0.6), 0 0 50px rgba(255,40,0,0.25), inset 0 1px 0 rgba(255,180,80,0.3)",
             }}>
               <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 22, fontWeight: 900, color: "#ff8c00", WebkitFontSmoothing: "antialiased" }}>Д</span>
               <div style={{ position:"absolute", inset:0, borderRadius:"14px", background:"linear-gradient(135deg, rgba(255,120,0,0.1) 0%, transparent 60%)" }} />
@@ -500,10 +514,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
               lineHeight: 1.2,
               letterSpacing: "0.02em",
               color: "#ff8800",
-              /* Убираем WebkitTextFillColor + filter — они размывают */
-              textShadow: "0 0 40px rgba(255,100,0,0.5), 0 2px 0 rgba(180,60,0,0.6)",
-              transform: "perspective(400px) rotateX(3deg)",
-              transformOrigin: "50% 100%",
+              textShadow: "0 0 40px rgba(255,100,0,0.6), 0 0 80px rgba(255,60,0,0.3), 0 2px 0 rgba(150,50,0,0.8)",
+              // transform убран — rotateX размывает текст
               WebkitFontSmoothing: "antialiased",
             }}>
               КОРПОРАТИВНЫЙ<br />МЕССЕНДЖЕР
@@ -1582,7 +1594,6 @@ function AppInner() {
             background: `linear-gradient(145deg, color-mix(in srgb, var(--t-accent) 80%, white), var(--t-accent))`,
             boxShadow: `0 2px 12px color-mix(in srgb, var(--t-accent) 50%, transparent), 0 4px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.3)`,
             display: "flex", alignItems: "center", justifyContent: "center",
-            transform: "perspective(200px) rotateX(6deg)",
           }}>
             <span style={{ fontFamily: FONT.display, fontSize: 14, fontWeight: 900, color: "#fff", textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>Д</span>
           </div>

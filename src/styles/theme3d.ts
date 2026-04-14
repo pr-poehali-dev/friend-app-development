@@ -35,14 +35,15 @@ export const btn3d = (color = "var(--t-accent)"): React.CSSProperties => ({
   letterSpacing: "0.06em",
   cursor: "pointer",
   boxShadow: `
+    0 0 0 1px color-mix(in srgb, ${color} 40%, transparent),
+    0 0 16px color-mix(in srgb, ${color} 55%, transparent),
     0 4px 0 color-mix(in srgb, ${color} 55%, black),
     0 6px 14px color-mix(in srgb, ${color} 35%, transparent),
     inset 0 1px 0 rgba(255,255,255,0.3)
   `,
-  transform: "perspective(200px) rotateX(4deg) translateY(0)",
-  transition: "all 0.12s ease",
+  transition: "all 0.15s ease",
   position: "relative" as const,
-  textShadow: "0 1px 2px rgba(0,0,0,0.3)",
+  textShadow: "0 1px 2px rgba(0,0,0,0.4)",
 });
 
 // Текст заголовок — чёткий, без размытия
