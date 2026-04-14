@@ -1356,6 +1356,20 @@ function AppInner() {
   const [sendingBotMsg, setSendingBotMsg] = useState(false);
   const [externalContacts, setExternalContacts] = useState<{id:number;display_name:string;phone?:string;email?:string;position?:string;department?:string;avatar_initials:string;online:boolean;source:string;linked_user_id?:number}[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+
+  // Локальный toast (без бэкенда) — для ошибок/уведомлений UI
+  const showToast = (title: string, body: string, type: "info" | "warning" | "error" = "info") => {
+    const fakeNotif: AppNotification = {
+      id: Date.now(),
+      type: type === "error" ? "warning" : type,
+      title,
+      body,
+      data: null,
+      created_at: new Date().toISOString(),
+    };
+    setNotifications(prev => [fakeNotif, ...prev]);
+    setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== fakeNotif.id)), 5000);
+  };
   const [adminUsers, setAdminUsers] = useState<Record<string, unknown>[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminTab, setAdminTab] = useState<"users"|"bans"|"chat">("users");
@@ -1535,17 +1549,26 @@ function AppInner() {
     file: File,
     contextKey: string  // "chat:{id}" или "store"
   ): Promise<{ message?: unknown; file?: unknown } | null> => {
-    const CHUNK_SIZE = 350 * 1024; // 350KB на чанк (base64 ~= 467KB < 512KB лимит)
+    // 200KB бинарных = ~267KB base64 + JSON overhead — безопасно в пределах 512KB лимита
+    const CHUNK_SIZE = 200 * 1024;
     const MAX_MB = 50;
     if (file.size > MAX_MB * 1024 * 1024) {
-      alert(`Файл слишком большой. Максимум ${MAX_MB} МБ.`);
+      showToast("Файл слишком большой", `Максимальный размер файла — ${MAX_MB} МБ`, "error");
       return null;
     }
 
     // Читаем файл целиком как ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
-    const totalChunks = Math.ceil(bytes.length / CHUNK_SIZE);
+    const totalChunks = Math.max(1, Math.ceil(bytes.length / CHUNK_SIZE));
+
+    // Быстрая конвертация Uint8Array → base64 без Array.from
+    const toBase64 = (buf: Uint8Array): string => {
+      let binary = "";
+      const len = buf.byteLength;
+      for (let k = 0; k < len; k++) binary += String.fromCharCode(buf[k]);
+      return btoa(binary);
+    };
 
     // 1. init
     const initRes = await fetch(`${API.fileUpload}/init`, {
@@ -1563,31 +1586,29 @@ function AppInner() {
     }
     const { upload_id } = await initRes.json();
 
-    // 2. chunks
+    // 2. chunks — последовательно с повтором при ошибке
     for (let i = 0; i < totalChunks; i++) {
       const slice = bytes.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-      // Конвертируем Uint8Array в base64
-      let b64 = "";
-      const chunkArray = Array.from(slice);
-      for (let j = 0; j < chunkArray.length; j += 8192) {
-        b64 += String.fromCharCode(...chunkArray.slice(j, j + 8192));
-      }
-      b64 = btoa(b64);
+      const b64 = toBase64(slice);
 
-      const chunkRes = await fetch(`${API.fileUpload}/chunk`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({
-          upload_id,
-          chunk_index: i,
-          total_chunks: totalChunks,
-          data: b64,
-        }),
-      });
-      if (!chunkRes.ok) {
+      let lastErr: Error | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const chunkRes = await fetch(`${API.fileUpload}/chunk`, {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({
+            upload_id,
+            chunk_index: i,
+            total_chunks: totalChunks,
+            data: b64,
+          }),
+        });
+        if (chunkRes.ok) { lastErr = null; break; }
         const err = await chunkRes.json().catch(() => ({}));
-        throw new Error(err.error || `chunk ${i} failed: ${chunkRes.status}`);
+        lastErr = new Error(err.error || `chunk ${i} failed: ${chunkRes.status}`);
+        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
       }
+      if (lastErr) throw lastErr;
     }
 
     // 3. finish
@@ -1613,7 +1634,7 @@ function AppInner() {
         loadChats();
       }
     } catch (e) {
-      alert("Ошибка загрузки файла: " + (e instanceof Error ? e.message : String(e)));
+      showToast("Ошибка загрузки файла", e instanceof Error ? e.message : String(e), "error");
     } finally {
       setUploadingFile(false);
     }
@@ -1628,7 +1649,7 @@ function AppInner() {
         setUserFiles(prev => [result.file as never, ...prev]);
       }
     } catch (e) {
-      alert("Ошибка загрузки: " + (e instanceof Error ? e.message : String(e)));
+      showToast("Ошибка загрузки", e instanceof Error ? e.message : String(e), "error");
     } finally {
       setUploadingUserFile(false);
     }
@@ -3008,10 +3029,10 @@ function AppInner() {
                             const d = await r.json();
                             mailSent = d.sent || 0;
                           }
-                          alert(`Отправлено: ${chatSent} чат(ов), ${mailSent} email(ов)`);
+                          showToast("Файл отправлен", `${chatSent} чат(ов), ${mailSent} email(ов)`, "info");
                           setSendFileModal(null);
                         } catch {
-                          alert("Ошибка отправки");
+                          showToast("Ошибка отправки", "Не удалось отправить файл", "error");
                         } finally {
                           setSendingFile(false);
                         }
