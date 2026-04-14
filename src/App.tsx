@@ -1290,7 +1290,7 @@ function AppInner() {
   const loadExternalContacts = useCallback(async () => {
     if (!sessionToken) return;
     try {
-      const res = await fetch(API.contacts, { headers: { "X-Session-Id": sessionToken } });
+      const res = await fetch(`${API.contacts}?action=contacts`, { headers: { "X-Session-Id": sessionToken } });
       const data = await res.json();
       if (data.contacts) setExternalContacts(data.contacts);
     } catch (e) { console.error(e); }
@@ -1300,7 +1300,7 @@ function AppInner() {
   const fetchNotifications = useCallback(async () => {
     if (!sessionToken) return;
     try {
-      const res = await fetch(`${API.contacts}/notifications`, { headers: { "X-Session-Id": sessionToken } });
+      const res = await fetch(`${API.contacts}?action=notifications`, { headers: { "X-Session-Id": sessionToken } });
       const data = await res.json();
       if (data.notifications?.length) setNotifications(data.notifications);
     } catch { /* silent */ }
@@ -1309,7 +1309,7 @@ function AppInner() {
   const dismissNotifications = useCallback(async (ids: number[]) => {
     if (!sessionToken) return;
     setNotifications(prev => prev.filter(n => !ids.includes(n.id)));
-    fetch(`${API.contacts}/notifications/read`, {
+    fetch(`${API.contacts}?action=read_notifications`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Session-Id": sessionToken },
       body: JSON.stringify({ ids }),

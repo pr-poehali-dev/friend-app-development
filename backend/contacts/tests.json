@@ -11,6 +11,12 @@
       "method": "GET",
       "path": "/",
       "expectedStatus": 401
+    },
+    {
+      "name": "POST create_invite unauthorized",
+      "method": "POST",
+      "path": "/?action=create_invite",
+      "expectedStatus": 401
     }
   ]
 }

@@ -22,7 +22,7 @@ export default function AddContactModal({ onClose, onAdded, apiUrl, sessionId }:
     if (!form.display_name.trim()) { setError("Укажите имя"); return; }
     setLoading(true); setError("");
     try {
-      const res = await fetch(apiUrl, {
+      const res = await fetch(`${apiUrl}?action=add`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
         body: JSON.stringify(form),
@@ -49,7 +49,7 @@ export default function AddContactModal({ onClose, onAdded, apiUrl, sessionId }:
     if (!csvText.trim()) { setError("Загрузите файл или вставьте CSV"); return; }
     setLoading(true); setError("");
     try {
-      const res = await fetch(`${apiUrl}/import`, {
+      const res = await fetch(`${apiUrl}?action=import`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
         body: JSON.stringify({ csv: csvText }),

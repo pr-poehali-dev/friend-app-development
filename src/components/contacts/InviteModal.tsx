@@ -32,12 +32,14 @@ export default function InviteModal({ onClose, apiUrl, sessionId }: Props) {
   const [selectedInvite, setSelectedInvite] = useState<Invite | null>(null);
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const [error, setError] = useState("");
 
   const loadInvites = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${apiUrl}/invites`, { headers: { "X-Session-Id": sessionId } });
-      const data = await res.json();
+      const res = await fetch(`${apiUrl}?action=invites`, { headers: { "X-Session-Id": sessionId } });
+      let data = await res.json();
+      if (typeof data === "string") { try { data = JSON.parse(data); } catch { /* ignore */ } }
       setInvites(data.invites || []);
       if (!selectedInvite && data.invites?.length) setSelectedInvite(data.invites[0]);
     } catch (e) { console.error(e); }
@@ -48,18 +50,28 @@ export default function InviteModal({ onClose, apiUrl, sessionId }: Props) {
 
   const createInvite = async () => {
     setCreating(true);
+    setError("");
     try {
-      const res = await fetch(`${apiUrl}/invites`, {
+      const res = await fetch(`${apiUrl}?action=create_invite`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
         body: JSON.stringify({ label: label.trim() || null }),
       });
-      const data = await res.json();
-      if (data.ok) {
+      const rawText = await res.text();
+      console.log("[InviteModal] response status:", res.status, "body:", rawText);
+      let data: Record<string, unknown>;
+      try { data = JSON.parse(rawText); } catch { data = {}; }
+      if (typeof data === "string") { try { data = JSON.parse(data); } catch { /* ignore */ } }
+      if ((data as {ok?: boolean}).ok || (data as {code?: string}).code) {
         await loadInvites();
         setLabel("");
+      } else {
+        setError((data as {error?: string}).error || `Ошибка ${res.status}: ${rawText.slice(0, 100)}`);
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error("[InviteModal] fetch error:", e);
+      setError("Ошибка соединения");
+    }
     setCreating(false);
   };
 
@@ -110,7 +122,7 @@ export default function InviteModal({ onClose, apiUrl, sessionId }: Props) {
             <div className="flex gap-2">
               <input
                 value={label}
-                onChange={e => setLabel(e.target.value)}
+                onChange={e => { setLabel(e.target.value); setError(""); }}
                 placeholder="Название (необязательно)"
                 className="flex-1 px-3 py-2 text-xs rounded-sm outline-none"
                 style={{ ...input3d(), fontSize: 12 }}
@@ -123,6 +135,9 @@ export default function InviteModal({ onClose, apiUrl, sessionId }: Props) {
                 СОЗДАТЬ
               </button>
             </div>
+            {error && (
+              <p className="mt-2 text-[11px]" style={{ fontFamily: FONT.body, color: "var(--t-danger)" }}>{error}</p>
+            )}
           </div>
 
           {/* Список ссылок */}

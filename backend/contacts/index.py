@@ -1,18 +1,17 @@
 """
-API контактов: ручное добавление, импорт CSV, инвайт-ссылки, QR-коды.
-GET /              — список внешних контактов пользователя
-POST /             — добавить контакт вручную
-POST /import       — импорт CSV (name,phone,email,position,department)
-GET /invites       — список инвайт-ссылок пользователя
-POST /invites      — создать инвайт-ссылку
-GET /invite/{code} — публичная инфо по инвайту (без авторизации)
-POST /join         — принять инвайт (зарегистрированный пользователь вступает в список)
-GET /notifications — непрочитанные уведомления текущего пользователя
-POST /notifications/read — пометить уведомления прочитанными
+API контактов через query action:
+GET  ?action=contacts              — список внешних контактов
+POST ?action=add                   — добавить контакт вручную
+POST ?action=import                — импорт CSV
+GET  ?action=invites               — список инвайт-ссылок
+POST ?action=create_invite         — создать инвайт-ссылку
+GET  ?action=invite_info&code=XXX  — публичная инфо по инвайту
+POST ?action=join                  — принять инвайт
+GET  ?action=notifications         — непрочитанные уведомления
+POST ?action=read_notifications    — пометить прочитанными
 """
 import json
 import os
-import re
 import secrets
 import csv
 import io
@@ -51,28 +50,33 @@ def initials_from_name(name: str) -> str:
     return name[:2].upper() if name else "??"
 
 
-def normalize_path(raw_path: str) -> str:
-    """Убирает UUID функции из начала пути: /uuid/invites -> /invites"""
-    p = re.sub(r'^/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '', raw_path)
-    return p or "/"
-
-
 def handler(event: dict, context) -> dict:
     """Управление контактами и инвайт-ссылками."""
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS, "body": ""}
 
     method = event.get("httpMethod", "GET")
-    path = normalize_path(event.get("path", "/"))
+    qs = event.get("queryStringParameters") or {}
+    action = qs.get("action", "")
     headers = event.get("headers") or {}
-    session_id = headers.get("X-Session-Id") or headers.get("x-session-id") or (event.get("queryStringParameters") or {}).get("session_id")
+    session_id = headers.get("X-Session-Id") or headers.get("x-session-id") or qs.get("session_id")
+
+    body = {}
+    if method == "POST":
+        try:
+            raw = event.get("body") or "{}"
+            body = json.loads(raw)
+            if isinstance(body, str):
+                body = json.loads(body)
+        except Exception:
+            body = {}
 
     conn = get_conn()
     cur = conn.cursor()
 
-    # ── Публичный: GET /invite/{code} ──
-    if method == "GET" and path.startswith("/invite/"):
-        code = path.split("/invite/")[-1].strip("/")
+    # ── Публичный: GET invite_info ──
+    if action == "invite_info":
+        code = qs.get("code", "")
         cur.execute(
             "SELECT id, label, created_by, used_count, max_uses, expires_at FROM invites WHERE code = %s",
             (code,)
@@ -98,9 +102,8 @@ def handler(event: dict, context) -> dict:
             })
         }
 
-    # ── Публичный: POST /join ──
-    if method == "POST" and path == "/join":
-        body = json.loads(event.get("body") or "{}")
+    # ── Публичный: POST join ──
+    if action == "join":
         code = body.get("code")
         user = get_user_by_session(cur, session_id)
         if not user:
@@ -158,8 +161,8 @@ def handler(event: dict, context) -> dict:
 
     user_id = user["id"]
 
-    # ── GET / — список внешних контактов ──
-    if method == "GET" and path == "/":
+    # ── GET contacts ──
+    if action == "contacts" or (method == "GET" and not action):
         cur.execute(
             """SELECT ec.id, ec.display_name, ec.phone, ec.email, ec.position, ec.department,
                       ec.avatar_initials, ec.notes, ec.source, ec.linked_user_id, ec.created_at,
@@ -184,9 +187,8 @@ def handler(event: dict, context) -> dict:
         ]
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"contacts": contacts})}
 
-    # ── POST /import — импорт CSV ──
-    if method == "POST" and path == "/import":
-        body = json.loads(event.get("body") or "{}")
+    # ── POST import ──
+    if action == "import":
         csv_text = body.get("csv", "")
         reader = csv.DictReader(io.StringIO(csv_text))
         added = 0
@@ -207,8 +209,8 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True, "added": added})}
 
-    # ── GET /invites — список инвайтов ──
-    if method == "GET" and path == "/invites":
+    # ── GET invites ──
+    if action == "invites":
         cur.execute(
             "SELECT id, code, label, used_count, max_uses, expires_at, created_at FROM invites WHERE created_by = %s ORDER BY created_at DESC",
             (user_id,)
@@ -225,9 +227,8 @@ def handler(event: dict, context) -> dict:
         ]
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"invites": invites})}
 
-    # ── POST /invites — создать инвайт ──
-    if method == "POST" and path == "/invites":
-        body = json.loads(event.get("body") or "{}")
+    # ── POST create_invite ──
+    if action == "create_invite":
         code = secrets.token_urlsafe(16)
         cur.execute(
             "INSERT INTO invites (code, created_by, label, max_uses) VALUES (%s, %s, %s, %s) RETURNING id, code",
@@ -238,30 +239,26 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True, "id": row[0], "code": row[1]})}
 
-    # ── GET /notifications ──
-    if method == "GET" and path == "/notifications":
+    # ── GET notifications ──
+    if action == "notifications":
         cur.execute(
             """SELECT id, type, title, body, data, created_at
                FROM notifications
                WHERE user_id = %s AND read_at IS NULL
-               ORDER BY created_at DESC
-               LIMIT 50""",
+               ORDER BY created_at DESC LIMIT 50""",
             (user_id,)
         )
         rows = cur.fetchall()
         conn.close()
         notifs = [
-            {
-                "id": r[0], "type": r[1], "title": r[2], "body": r[3],
-                "data": r[4], "created_at": r[5].isoformat() if r[5] else None,
-            }
+            {"id": r[0], "type": r[1], "title": r[2], "body": r[3],
+             "data": r[4], "created_at": r[5].isoformat() if r[5] else None}
             for r in rows
         ]
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"notifications": notifs, "unread": len(notifs)})}
 
-    # ── POST /notifications/read ──
-    if method == "POST" and path == "/notifications/read":
-        body = json.loads(event.get("body") or "{}")
+    # ── POST read_notifications ──
+    if action == "read_notifications":
         ids = body.get("ids")
         if ids:
             placeholders = ",".join(["%s"] * len(ids))
@@ -275,9 +272,8 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
 
-    # ── POST / — добавить контакт вручную ──
-    if method == "POST" and path == "/":
-        body = json.loads(event.get("body") or "{}")
+    # ── POST add (добавить контакт вручную) ──
+    if action == "add":
         name = (body.get("display_name") or "").strip()
         if not name:
             conn.close()
@@ -295,4 +291,4 @@ def handler(event: dict, context) -> dict:
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True, "id": new_id})}
 
     conn.close()
-    return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Not found", "path": path, "method": method})}
+    return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "Unknown action", "action": action, "method": method})}

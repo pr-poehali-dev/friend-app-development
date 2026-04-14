@@ -27,7 +27,7 @@ export default function JoinPage({ code, apiUrl, sessionId, onJoined, onLogin }:
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(`${apiUrl}/invite/${code}`);
+        const res = await fetch(`${apiUrl}?action=invite_info&code=${encodeURIComponent(code)}`);
         const data = await res.json();
         if (res.ok) setInfo(data);
         else setError(data.error || "Ссылка недействительна");
@@ -41,7 +41,7 @@ export default function JoinPage({ code, apiUrl, sessionId, onJoined, onLogin }:
     if (!sessionId) { onLogin(); return; }
     setJoining(true); setError("");
     try {
-      const res = await fetch(`${apiUrl}/join`, {
+      const res = await fetch(`${apiUrl}?action=join`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
         body: JSON.stringify({ code }),
