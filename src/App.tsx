@@ -1670,7 +1670,9 @@ function AppInner() {
         loadChats();
       }
     } catch (e) {
-      showToast("Ошибка загрузки файла", e instanceof Error ? e.message : String(e), "error");
+      const msg = e instanceof Error ? `${e.message} | ${e.name}` : String(e);
+      console.error("[file-upload] error:", e);
+      showToast("Ошибка загрузки файла", msg, "error");
       setUploadProgress(0);
     } finally {
       setUploadingFile(false);
