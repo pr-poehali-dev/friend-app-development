@@ -85,6 +85,7 @@ const API = {
   avatar: "https://functions.poehali.dev/164ba4b4-9b9c-4668-8ca1-0bf6fbcbf6ab",
   calls: "https://functions.poehali.dev/af1c4fda-8213-498e-baac-420159c8fc6e",
   contacts: "https://functions.poehali.dev/5c7f4e46-aec0-4fab-8215-3c55c316f3a3",
+  fileUpload: "https://functions.poehali.dev/19819ee8-2dfb-41ae-90b2-13698b6ffa77",
 };
 
 type Section = "chats" | "contacts" | "calls" | "video" | "files" | "bots" | "settings" | "analytics";
@@ -1405,24 +1406,60 @@ function AppInner() {
   // Загрузка файла в чат
   const handleFileUpload = async (file: File) => {
     if (!activeChat || uploadingFile) return;
+    const MAX_MB = 50;
+    if (file.size > MAX_MB * 1024 * 1024) {
+      alert(`Файл слишком большой. Максимум ${MAX_MB} МБ.`);
+      return;
+    }
     setUploadingFile(true);
     try {
-      const reader = new FileReader();
-      const b64 = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve((reader.result as string).split(",")[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const res = await fetch(`${API.messages}/upload`, {
+      // Шаг 1: получить presigned URL
+      const presignRes = await fetch(`${API.fileUpload}/presign`, {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ chat_id: activeChat.id, file_name: file.name, file_data: b64 }),
+        body: JSON.stringify({
+          chat_id: activeChat.id,
+          file_name: file.name,
+          file_size: file.size,
+          file_type: file.type || "application/octet-stream",
+        }),
       });
-      const data = await res.json();
+      if (!presignRes.ok) {
+        const err = await presignRes.json().catch(() => ({}));
+        alert(err.error || "Ошибка получения ссылки для загрузки");
+        return;
+      }
+      const { upload_url, cdn_url } = await presignRes.json();
+
+      // Шаг 2: загрузить файл напрямую в S3 через PUT
+      const uploadRes = await fetch(upload_url, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file,
+      });
+      if (!uploadRes.ok) {
+        alert("Ошибка загрузки файла в хранилище");
+        return;
+      }
+
+      // Шаг 3: подтвердить и сохранить сообщение
+      const confirmRes = await fetch(`${API.fileUpload}/confirm`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          chat_id: activeChat.id,
+          file_name: file.name,
+          file_size: file.size,
+          cdn_url,
+        }),
+      });
+      const data = await confirmRes.json();
       if (data.message) {
         setMessages(prev => [...prev, data.message]);
         loadChats();
       }
+    } catch {
+      alert("Ошибка соединения при загрузке файла");
     } finally {
       setUploadingFile(false);
     }
@@ -1939,17 +1976,42 @@ function AppInner() {
                             <span className="msg-sender ml-2" style={{ color: "var(--t-accent)" }}>{msg.sender_name}</span>
                           )}
                           <div className="px-4 py-2.5" style={msg.own ? msgOwn() : msgOther()}>
-                            {msg.type === "file" ? (
-                              <a href={msg.file_url || "#"} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-                                <div style={{ width: 36, height: 36, borderRadius: 8, background: `color-mix(in srgb, var(--t-accent) 15%, transparent)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                  <Icon name={/\.(png|jpe?g|gif|webp|svg)$/i.test(msg.file_name || "") ? "Image" : /\.(zip|rar|7z|tar)$/i.test(msg.file_name || "") ? "Archive" : "FileText"} size={18} style={liveIcon()} />
+                            {msg.type === "file" ? (() => {
+                              const name = msg.file_name || "";
+                              const url = msg.file_url || "#";
+                              const isImage = /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(name);
+                              const isVideo = /\.(mp4|webm|mov|avi|mkv)$/i.test(name);
+                              const isAudio = /\.(mp3|ogg|wav|m4a|aac)$/i.test(name);
+                              if (isImage) return (
+                                <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
+                                  <img src={url} alt={name} style={{ maxWidth: 260, maxHeight: 200, borderRadius: 8, display: "block", objectFit: "cover" }} loading="lazy" />
+                                  <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)", marginTop: 4 }}>{msg.file_size}</div>
+                                </a>
+                              );
+                              if (isVideo) return (
+                                <div>
+                                  <video src={url} controls style={{ maxWidth: 260, maxHeight: 180, borderRadius: 8, display: "block" }} />
+                                  <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)", marginTop: 4 }}>{name} · {msg.file_size}</div>
                                 </div>
-                                <div className="min-w-0">
-                                  <div className="msg-text font-medium truncate max-w-[180px]" style={{ color: "var(--t-text)" }}>{msg.file_name}</div>
-                                  <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)" }}>{msg.file_size}</div>
+                              );
+                              if (isAudio) return (
+                                <div>
+                                  <audio src={url} controls style={{ width: 220, marginBottom: 4 }} />
+                                  <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)" }}>{name} · {msg.file_size}</div>
                                 </div>
-                              </a>
-                            ) : (
+                              );
+                              return (
+                                <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                                  <div style={{ width: 36, height: 36, borderRadius: 8, background: `color-mix(in srgb, var(--t-accent) 15%, transparent)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                    <Icon name={/\.(zip|rar|7z|tar|gz)$/i.test(name) ? "Archive" : /\.(pdf)$/i.test(name) ? "FileText" : "File"} size={18} style={liveIcon()} />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="msg-text font-medium truncate max-w-[180px]" style={{ color: "var(--t-text)" }}>{name}</div>
+                                    <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)" }}>{msg.file_size}</div>
+                                  </div>
+                                </a>
+                              );
+                            })() : (
                               <span className="msg-text">{msg.text}</span>
                             )}
                           </div>
@@ -1962,15 +2024,20 @@ function AppInner() {
                   {/* Поле ввода */}
                   <div className="px-4 py-3 flex-shrink-0" style={{ borderTop: "1px solid var(--t-border)", background: `linear-gradient(0deg, var(--t-bg-main), color-mix(in srgb, var(--t-bg-main) 95%, var(--t-accent)))` }}>
                     {uploadingFile && (
-                      <div className="flex items-center gap-2 mb-2" style={{ fontFamily: FONT.body, fontSize: 11, color: "var(--t-accent)" }}>
-                        <div className="w-3 h-3 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--t-accent)", borderTopColor: "transparent" }} />
-                        Загружаем файл...
+                      <div className="flex items-center gap-2 mb-2 px-1" style={{ fontFamily: FONT.body, fontSize: 11, color: "var(--t-accent)" }}>
+                        <div className="w-3 h-3 border-2 rounded-full animate-spin flex-shrink-0" style={{ borderColor: "var(--t-accent)", borderTopColor: "transparent" }} />
+                        <span>Загружаем файл...</span>
+                        <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: "var(--t-border)" }}>
+                          <div className="h-full rounded-full animate-pulse" style={{ background: "var(--t-accent)", width: "60%" }} />
+                        </div>
                       </div>
                     )}
                     <div className="flex items-center gap-2 px-3 py-2" style={{ background: "var(--t-bg-panel)", border: "1px solid var(--t-border)", borderRadius: 14, boxShadow: "0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)" }}>
-                      <label className="cursor-pointer flex-shrink-0 transition-all" style={liveIcon(1)}>
+                      <label className={`flex-shrink-0 transition-all ${uploadingFile ? "opacity-40 pointer-events-none" : "cursor-pointer"}`} style={liveIcon(1)}
+                        title="Прикрепить файл (до 50 МБ)">
                         <Icon name="Paperclip" size={17} />
-                        <input type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ""; }} />
+                        <input type="file" className="hidden" accept="*/*" disabled={uploadingFile}
+                          onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ""; }} />
                       </label>
                       <input
                         value={msgInput}

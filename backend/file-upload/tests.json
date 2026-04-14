@@ -1,0 +1,24 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Presign — unauthorized without session",
+      "method": "POST",
+      "path": "/presign",
+      "body": {"chat_id": 1, "file_name": "test.jpg", "file_size": 1024, "file_type": "image/jpeg"},
+      "expectedStatus": 401
+    },
+    {
+      "name": "Confirm — unauthorized without session",
+      "method": "POST",
+      "path": "/confirm",
+      "body": {"chat_id": 1, "file_name": "test.jpg", "file_size": 1024, "cdn_url": "https://cdn.poehali.dev/test"},
+      "expectedStatus": 401
+    }
+  ]
+}
