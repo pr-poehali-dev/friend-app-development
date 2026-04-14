@@ -1846,27 +1846,37 @@ function AppInner() {
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" },
+        { urls: "stun:stun3.l.google.com:19302" },
+        { urls: "stun:stun4.l.google.com:19302" },
         { urls: "stun:stun.cloudflare.com:3478" },
+        { urls: "stun:stun.ekiga.net" },
+        { urls: "stun:stun.ideasip.com" },
         {
-          urls: "turn:openrelay.metered.ca:80",
-          username: "openrelayproject",
-          credential: "openrelayproject",
-        },
-        {
-          urls: "turn:openrelay.metered.ca:443",
-          username: "openrelayproject",
-          credential: "openrelayproject",
+          urls: [
+            "turn:relay1.expressturn.com:3478",
+            "turns:relay1.expressturn.com:443",
+          ],
+          username: "efOG5BPZFP2AQIQPNJ",
+          credential: "uBhKqPuaVmvBFxp8",
         },
       ],
+      iceCandidatePoolSize: 10,
     });
     pc.onicecandidate = (e) => {
       if (e.candidate) sendSignal(callId, targetUserId, "candidate", e.candidate);
     };
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === "connected") setCallStatus("active");
-      if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+      // disconnected — временное, ждём reconnect; failed — финальная ошибка
+      if (pc.connectionState === "failed") {
         setCallStatus("error");
-        setCallErrorMsg("Соединение прервано");
+        setCallErrorMsg("Не удалось установить соединение");
+      }
+    };
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+        setCallStatus("active");
       }
     };
     pc.ontrack = (e) => {
@@ -1897,7 +1907,14 @@ function AppInner() {
       });
       setLocalStream(stream);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Нет доступа к микрофону/камере";
+      const name = err instanceof Error ? (err as { name?: string }).name : "";
+      let msg = "Нет доступа к микрофону/камере";
+      if (name === "NotAllowedError" || name === "PermissionDeniedError")
+        msg = type === "video" ? "Разрешите доступ к камере и микрофону в браузере" : "Разрешите доступ к микрофону в браузере";
+      else if (name === "NotFoundError" || name === "DevicesNotFoundError")
+        msg = type === "video" ? "Камера или микрофон не найдены" : "Микрофон не найден";
+      else if (name === "NotReadableError")
+        msg = "Устройство занято другим приложением";
       setCallStatus("error");
       setCallErrorMsg(msg);
       return;
@@ -1919,7 +1936,7 @@ function AppInner() {
       setPeerConnection(pc);
     } catch {
       setCallStatus("error");
-      setCallErrorMsg("Ошибка соединения с сервером");
+      setCallErrorMsg("Не удалось начать звонок. Проверьте интернет-соединение");
     }
   };
 
@@ -1947,7 +1964,14 @@ function AppInner() {
       stream.getTracks().forEach(track => pc.addTrack(track, stream));
       setPeerConnection(pc);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Нет доступа к микрофону/камере";
+      const name = err instanceof Error ? (err as { name?: string }).name : "";
+      let msg = "Нет доступа к микрофону/камере";
+      if (name === "NotAllowedError" || name === "PermissionDeniedError")
+        msg = call.call_type === "video" ? "Разрешите доступ к камере и микрофону в браузере" : "Разрешите доступ к микрофону в браузере";
+      else if (name === "NotFoundError" || name === "DevicesNotFoundError")
+        msg = call.call_type === "video" ? "Камера или микрофон не найдены" : "Микрофон не найден";
+      else if (name === "NotReadableError")
+        msg = "Устройство занято другим приложением";
       setCallStatus("error");
       setCallErrorMsg(msg);
     }
