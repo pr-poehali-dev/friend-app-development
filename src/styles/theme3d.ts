@@ -8,47 +8,52 @@ export const FONT = {
   mono:     "'IBM Plex Mono', monospace",
 };
 
-// Карточка с 3D эффектом и подсветкой акцентом
+// Карточка с 3D эффектом — адаптивна к теме
 export const card3d = (accent = "var(--t-accent)", opacity = 0.18): React.CSSProperties => ({
   background: "var(--t-bg-card)",
-  border: `1px solid color-mix(in srgb, ${accent} ${Math.round(opacity * 100)}%, transparent)`,
+  border: `1px solid color-mix(in srgb, ${accent} ${Math.round(opacity * 100)}%, var(--t-border))`,
   borderRadius: 16,
   boxShadow: `
-    0 0 0 1px color-mix(in srgb, ${accent} ${Math.round(opacity * 50)}%, transparent),
-    0 8px 32px rgba(0,0,0,0.5),
-    0 2px 8px rgba(0,0,0,0.3),
-    inset 0 1px 0 color-mix(in srgb, ${accent} 20%, transparent),
-    inset 0 -1px 0 rgba(0,0,0,0.3)
+    0 4px 16px rgba(0,0,0,0.12),
+    0 1px 4px rgba(0,0,0,0.08),
+    inset 0 1px 0 rgba(255,255,255,0.08)
   `,
   transform: "perspective(800px) rotateX(1deg)",
-  backdropFilter: "blur(8px)",
 });
 
-// Кнопка 3D выпуклая
+// Кнопка 3D выпуклая — текст всегда белый, хорошо читается
 export const btn3d = (color = "var(--t-accent)"): React.CSSProperties => ({
-  background: `linear-gradient(160deg, color-mix(in srgb, ${color} 130%, white), ${color} 50%, color-mix(in srgb, ${color} 70%, black))`,
+  background: `linear-gradient(160deg,
+    color-mix(in srgb, ${color} 115%, white) 0%,
+    ${color} 50%,
+    color-mix(in srgb, ${color} 75%, black) 100%)`,
   border: "none",
   borderRadius: 10,
-  color: "#fff",
+  color: "#ffffff",
   fontFamily: FONT.heading,
   fontWeight: 700,
   letterSpacing: "0.06em",
   cursor: "pointer",
-  boxShadow: `0 4px 0 color-mix(in srgb, ${color} 60%, black), 0 6px 16px color-mix(in srgb, ${color} 40%, transparent), inset 0 1px 0 rgba(255,255,255,0.25)`,
+  boxShadow: `
+    0 4px 0 color-mix(in srgb, ${color} 55%, black),
+    0 6px 14px color-mix(in srgb, ${color} 35%, transparent),
+    inset 0 1px 0 rgba(255,255,255,0.3)
+  `,
   transform: "perspective(200px) rotateX(4deg) translateY(0)",
   transition: "all 0.12s ease",
   position: "relative" as const,
+  textShadow: "0 1px 2px rgba(0,0,0,0.3)",
 });
 
-// Текст заголовок в 3D
+// Текст заголовок — чёткий, без размытия
 export const heading3d = (size = 20): React.CSSProperties => ({
   fontFamily: FONT.heading,
   fontSize: size,
   fontWeight: 700,
   letterSpacing: "0.06em",
   color: "var(--t-text)",
-  textShadow: "0 2px 8px rgba(0,0,0,0.5)",
-  filter: "drop-shadow(0 1px 4px color-mix(in srgb, var(--t-accent) 40%, transparent))",
+  // Убираем filter/textShadow — они размывают текст
+  // Используем только color через CSS-переменную
 });
 
 // Панель с боковой подсветкой
@@ -66,55 +71,58 @@ export const listItem = (active: boolean): React.CSSProperties => ({
   cursor: "pointer",
 });
 
-// Бейдж с пульсацией
+// Бейдж — адаптивный
 export const badge3d = (): React.CSSProperties => ({
   background: "var(--t-accent)",
-  color: "var(--t-bg-deep)",
+  color: "#ffffff",
   borderRadius: "50%",
   fontSize: 9,
   fontWeight: 700,
-  boxShadow: "0 0 8px var(--t-accent)",
+  boxShadow: "0 0 6px color-mix(in srgb, var(--t-accent) 60%, transparent)",
   animation: "badgePulse 2s ease-in-out infinite",
 });
 
-// Иконка живая
+// Иконка живая — без размытия filter
 export const liveIcon = (delay = 0): React.CSSProperties => ({
   color: "var(--t-accent)",
-  filter: `drop-shadow(0 0 4px var(--t-accent))`,
   animation: `iconLive 3s ease-in-out ${delay}s infinite`,
 });
 
-// Поле ввода
+// Поле ввода — чёткие цвета
 export const input3d = (): React.CSSProperties => ({
   background: "var(--t-bg-panel)",
-  border: "1px solid var(--t-border)",
+  border: "1px solid var(--t-border-md)",
   borderRadius: 10,
   color: "var(--t-text)",
   fontFamily: FONT.body,
-  boxShadow: "inset 0 2px 6px rgba(0,0,0,0.3)",
+  boxShadow: "inset 0 1px 4px rgba(0,0,0,0.12)",
   transition: "all 0.2s ease",
 });
 
-// Пузырь сообщения своего
+// Пузырь своего сообщения — текст всегда контрастный
 export const msgOwn = (): React.CSSProperties => ({
   background: "var(--t-msg-own-bg)",
   border: "1px solid var(--t-msg-own-br)",
   borderRadius: "16px 16px 4px 16px",
   fontFamily: FONT.body,
-  fontSize: 13,
+  fontSize: 13.5,
   lineHeight: 1.6,
-  boxShadow: "0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06)",
+  letterSpacing: "0.01em",
+  boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
   color: "var(--t-text)",
+  fontWeight: 400,
 });
 
-// Пузырь сообщения чужого
+// Пузырь чужого сообщения — текст чёткий
 export const msgOther = (): React.CSSProperties => ({
   background: "var(--t-bg-card)",
   border: "1px solid var(--t-border)",
   borderRadius: "16px 16px 16px 4px",
   fontFamily: FONT.body,
-  fontSize: 13,
+  fontSize: 13.5,
   lineHeight: 1.6,
-  boxShadow: "0 2px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.04)",
+  letterSpacing: "0.01em",
+  boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
   color: "var(--t-text-muted)",
+  fontWeight: 400,
 });

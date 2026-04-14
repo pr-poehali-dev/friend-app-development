@@ -186,7 +186,6 @@ function AvatarBadge({ initials, size = "md", online }: { initials: string; size
         display: "flex", alignItems: "center", justifyContent: "center",
         fontFamily: FONT.heading, fontWeight: 700, fontSize: fs, letterSpacing: "0.05em",
         color: "var(--t-accent)",
-        filter: "drop-shadow(0 0 4px color-mix(in srgb, var(--t-accent) 30%, transparent))",
       }}>
         {initials}
       </div>
@@ -213,37 +212,66 @@ function FileIconComp({ type }: { type: "doc" | "img" | "archive" | "audio" | "v
 type AuthStep = "login" | "forgot" | "email_code" | "register" | "reset_password";
 
 const FORM_CARD: React.CSSProperties = {
-  background: "linear-gradient(160deg, #0d0600 0%, #1a0a02 50%, #0a0300 100%)",
-  border: "1px solid rgba(255,100,20,0.25)",
+  background: "rgba(8,3,0,0.92)",
+  border: "1px solid rgba(255,100,20,0.35)",
   borderRadius: 20,
-  boxShadow: "0 0 40px rgba(255,80,0,0.25), 0 0 80px rgba(255,40,0,0.12), 0 30px 60px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,160,60,0.15), inset 0 -1px 0 rgba(255,40,0,0.1)",
+  boxShadow: "0 0 50px rgba(255,80,0,0.2), 0 30px 60px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,160,60,0.2), inset 0 -1px 0 rgba(255,40,0,0.12)",
   transform: "perspective(900px) rotateX(2deg) translateY(0)",
-  backdropFilter: "blur(20px)",
+  /* backdropFilter убран — он размывает текст внутри */
   padding: "28px 28px 24px",
   position: "relative" as const,
 };
-const inputCls = "w-full rounded-xl px-4 py-3 text-sm text-white/90 placeholder-white/20 focus:outline-none transition-all";
-const inputWithIconCls = "w-full rounded-xl pl-10 pr-4 py-3 text-sm text-white/90 placeholder-white/20 focus:outline-none transition-all";
-const INPUT_STYLE: React.CSSProperties = { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,100,20,0.2)", boxShadow: "inset 0 2px 8px rgba(0,0,0,0.4)" };
-const INPUT_FOCUS_STYLE: React.CSSProperties = { border: "1px solid rgba(255,160,50,0.5)", boxShadow: "inset 0 2px 8px rgba(0,0,0,0.4), 0 0 12px rgba(255,120,0,0.2)" };
+const inputCls = "w-full rounded-xl px-4 py-3 focus:outline-none transition-all";
+const inputWithIconCls = "w-full rounded-xl pl-10 pr-4 py-3 focus:outline-none transition-all";
+// Стиль для текста внутри полей — чёткий, не размытый
+const INPUT_TEXT: React.CSSProperties = {
+  color: "#ffffff",
+  fontSize: 14,
+  fontFamily: "'Space Grotesk', sans-serif",
+  fontWeight: 400,
+  WebkitFontSmoothing: "antialiased" as const,
+  MozOsxFontSmoothing: "grayscale" as const,
+};
+const INPUT_STYLE: React.CSSProperties = {
+  background: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,100,20,0.3)",
+  boxShadow: "inset 0 2px 6px rgba(0,0,0,0.5)",
+  ...INPUT_TEXT,
+};
+const INPUT_FOCUS_STYLE: React.CSSProperties = {
+  background: "rgba(255,255,255,0.08)",
+  border: "1px solid rgba(255,160,50,0.6)",
+  boxShadow: "inset 0 2px 6px rgba(0,0,0,0.4), 0 0 0 3px rgba(255,120,0,0.15)",
+  ...INPUT_TEXT,
+};
 const BTN_STYLE: React.CSSProperties = {
   width: "100%", padding: "13px", borderRadius: 12, fontFamily: "'Rajdhani', sans-serif",
-  fontWeight: 700, fontSize: 15, letterSpacing: "0.08em", color: "#fff", cursor: "pointer",
-  background: "linear-gradient(135deg, #cc4400 0%, #ff6600 40%, #ff9900 70%, #cc4400 100%)",
+  fontWeight: 700, fontSize: 15, letterSpacing: "0.1em",
+  color: "#ffffff",
+  textShadow: "0 1px 3px rgba(0,0,0,0.5)",
+  WebkitFontSmoothing: "antialiased" as const,
+  cursor: "pointer",
+  background: "linear-gradient(135deg, #d44800 0%, #ff6600 40%, #ff9000 70%, #d44800 100%)",
   backgroundSize: "200% 100%",
-  border: "none",
-  boxShadow: "0 4px 0 #7a2200, 0 8px 20px rgba(255,80,0,0.4), 0 0 30px rgba(255,100,0,0.2), inset 0 1px 0 rgba(255,200,100,0.3)",
+  border: "1px solid rgba(255,140,0,0.4)",
+  boxShadow: "0 4px 0 #7a2200, 0 8px 20px rgba(255,80,0,0.35), inset 0 1px 0 rgba(255,200,100,0.25)",
   transform: "perspective(200px) rotateX(6deg) translateY(0px)",
   transition: "all 0.15s ease",
   position: "relative" as const,
 };
-const errBox = "flex items-center gap-2 text-[11px] text-red-300 rounded-xl px-3 py-2.5";
+const errBox = "flex items-center gap-2 text-[11px] rounded-xl px-3 py-2.5";
 const label = "block text-[10px] font-semibold uppercase tracking-widest mb-2";
-const LABEL_STYLE: React.CSSProperties = { fontFamily:"'Rajdhani', sans-serif", color:"rgba(255,160,60,0.7)", letterSpacing:"0.15em" };
-const ICON_STYLE: React.CSSProperties = { color: "rgba(255,120,40,0.7)", filter: "drop-shadow(0 0 4px rgba(255,100,0,0.5))" };
+const LABEL_STYLE: React.CSSProperties = {
+  fontFamily: "'Rajdhani', sans-serif",
+  color: "rgba(255,180,80,0.9)",
+  letterSpacing: "0.15em",
+  fontWeight: 700,
+  WebkitFontSmoothing: "antialiased" as const,
+};
+const ICON_STYLE: React.CSSProperties = { color: "rgba(255,140,50,0.9)" };
 
 function Spinner() {
-  return <span className="w-4 h-4 border-2 border-[#080f1a]/30 border-t-[#080f1a] rounded-full animate-spin inline-block" />;
+  return <span className="w-4 h-4 border-2 rounded-full animate-spin inline-block" style={{ borderColor: "rgba(255,255,255,0.2)", borderTopColor: "#fff" }} />;
 }
 
 function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void }) {
@@ -409,7 +437,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
   }));
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden relative" style={{ background: "#000000", fontFamily: "'Space Grotesk', sans-serif" }}>
+    <div className="flex h-screen w-screen overflow-hidden relative" style={{ background: "#000000", fontFamily: "'Space Grotesk', sans-serif", WebkitFontSmoothing: "antialiased", MozOsxFontSmoothing: "grayscale" }}>
 
       {/* ── ЗВЁЗДНОЕ НЕБО ── */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -454,12 +482,12 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
               boxShadow: "0 0 20px rgba(255,80,0,0.5), 0 0 60px rgba(255,40,0,0.2), inset 0 1px 0 rgba(255,160,80,0.3)",
               transform: "perspective(200px) rotateX(5deg)",
             }}>
-              <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 22, fontWeight: 900, background: "linear-gradient(135deg, #ff8c00, #ff3300, #ffcc00)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", textShadow: "none", filter: "drop-shadow(0 0 8px rgba(255,100,0,0.8))" }}>Д</span>
+              <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 22, fontWeight: 900, color: "#ff8c00", WebkitFontSmoothing: "antialiased" }}>Д</span>
               <div style={{ position:"absolute", inset:0, borderRadius:"14px", background:"linear-gradient(135deg, rgba(255,120,0,0.1) 0%, transparent 60%)" }} />
             </div>
             <div>
-              <div style={{ fontFamily:"'Orbitron', sans-serif", fontSize:18, fontWeight:900, letterSpacing:"0.15em", background:"linear-gradient(135deg, #ff8c00, #ffcc00)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", filter:"drop-shadow(0 0 8px rgba(255,150,0,0.6))" }}>ДРУГ</div>
-              <div style={{ fontFamily:"'Rajdhani', sans-serif", fontSize:11, color:"rgba(255,150,50,0.6)", letterSpacing:"0.2em", marginTop:2 }}>MESSENGER</div>
+              <div style={{ fontFamily:"'Orbitron', sans-serif", fontSize:18, fontWeight:900, letterSpacing:"0.15em", color:"#ff9d00", WebkitFontSmoothing:"antialiased" }}>ДРУГ</div>
+              <div style={{ fontFamily:"'Rajdhani', sans-serif", fontSize:11, color:"rgba(255,150,50,0.7)", letterSpacing:"0.2em", marginTop:2, WebkitFontSmoothing:"antialiased" }}>MESSENGER</div>
             </div>
           </div>
 
@@ -467,23 +495,22 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
           <div style={{ perspective: "600px", marginBottom: 32 }}>
             <h1 style={{
               fontFamily: "'Orbitron', sans-serif",
-              fontSize: 38,
+              fontSize: 36,
               fontWeight: 900,
-              lineHeight: 1.15,
+              lineHeight: 1.2,
               letterSpacing: "0.02em",
-              background: "linear-gradient(135deg, #ffcc00 0%, #ff8c00 35%, #ff3300 65%, #ff8c00 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              filter: "drop-shadow(0 4px 12px rgba(255,100,0,0.7)) drop-shadow(0 0 30px rgba(255,60,0,0.4))",
-              transform: "perspective(400px) rotateX(4deg)",
+              color: "#ff8800",
+              /* Убираем WebkitTextFillColor + filter — они размывают */
+              textShadow: "0 0 40px rgba(255,100,0,0.5), 0 2px 0 rgba(180,60,0,0.6)",
+              transform: "perspective(400px) rotateX(3deg)",
               transformOrigin: "50% 100%",
-              textShadow: "none",
+              WebkitFontSmoothing: "antialiased",
             }}>
               КОРПОРАТИВНЫЙ<br />МЕССЕНДЖЕР
             </h1>
           </div>
 
-          <p style={{ fontFamily:"'Space Grotesk', sans-serif", fontSize:13, color:"rgba(255,180,100,0.55)", lineHeight:1.7, letterSpacing:"0.03em" }}>
+          <p style={{ fontFamily:"'Space Grotesk', sans-serif", fontSize:13, color:"rgba(255,180,100,0.7)", lineHeight:1.7, letterSpacing:"0.02em", WebkitFontSmoothing:"antialiased" }}>
             Безопасная связь для вашей команды.<br />Чаты, звонки, файлы и боты в одном месте.
           </p>
         </div>
@@ -499,12 +526,12 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
               <div style={{
                 width: 40, height: 40, borderRadius: 10, flexShrink: 0,
                 background: "linear-gradient(145deg, #1a0800, #2d1500)",
-                border: "1px solid rgba(255,100,20,0.35)",
-                boxShadow: "0 0 12px rgba(255,80,0,0.3), inset 0 1px 0 rgba(255,160,60,0.2)",
+                border: "1px solid rgba(255,100,20,0.4)",
+                boxShadow: "0 2px 8px rgba(255,80,0,0.2), inset 0 1px 0 rgba(255,160,60,0.15)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 animation: `iconPulse ${3 + i}s ease-in-out ${i * 0.5}s infinite`,
               }}>
-                <Icon name={f.icon} size={16} style={{ color: "#ff9030", filter: "drop-shadow(0 0 6px rgba(255,120,0,0.8))" }} />
+                <Icon name={f.icon} size={16} style={{ color: "#ff9030" }} />
               </div>
               <div>
                 <div style={{ fontFamily:"'Rajdhani', sans-serif", fontWeight:600, fontSize:13, color:"rgba(255,200,120,0.9)", letterSpacing:"0.05em" }}>{f.text}</div>
@@ -522,9 +549,9 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
           {/* Мобильное лого */}
           <div className="lg:hidden flex items-center gap-3 mb-8">
             <div style={{ width:42, height:42, borderRadius:12, background:"linear-gradient(145deg,#1a0a00,#2d1200)", border:"1px solid rgba(255,120,30,0.5)", boxShadow:"0 0 16px rgba(255,80,0,0.4)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-              <span style={{ fontFamily:"'Orbitron',sans-serif", fontSize:18, fontWeight:900, background:"linear-gradient(135deg,#ff8c00,#ff3300,#ffcc00)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>Д</span>
+              <span style={{ fontFamily:"'Orbitron',sans-serif", fontSize:18, fontWeight:900, color:"#ff8c00", WebkitFontSmoothing:"antialiased" }}>Д</span>
             </div>
-            <span style={{ fontFamily:"'Orbitron',sans-serif", fontSize:14, fontWeight:900, letterSpacing:"0.12em", background:"linear-gradient(135deg,#ff8c00,#ffcc00)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>ДРУГ</span>
+            <span style={{ fontFamily:"'Orbitron',sans-serif", fontSize:14, fontWeight:900, letterSpacing:"0.12em", color:"#ff9d00", WebkitFontSmoothing:"antialiased" }}>ДРУГ</span>
           </div>
 
           {/* STEP: LOGIN */}
@@ -532,8 +559,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
             <div style={{ animation: "fadeSlideIn 0.4s cubic-bezier(0.22,1,0.36,1)" }}>
               <div style={FORM_CARD}>
                 <div style={{ position:"absolute", inset:0, borderRadius:20, background:"linear-gradient(135deg, rgba(255,120,30,0.08) 0%, transparent 50%)", pointerEvents:"none" }} />
-                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:22, fontWeight:900, letterSpacing:"0.04em", background:"linear-gradient(135deg,#ffcc00,#ff6600)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", marginBottom:4 }}>ВХОД</h2>
-                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,160,60,0.5)", marginBottom:24, letterSpacing:"0.04em" }}>Введите никнейм и пароль</p>
+                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:22, fontWeight:900, letterSpacing:"0.04em", color:"#ff9000", textShadow:"0 0 20px rgba(255,140,0,0.4), 0 1px 0 rgba(120,60,0,0.5)", marginBottom:4, WebkitFontSmoothing:"antialiased" }}>ВХОД</h2>
+                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,180,80,0.75)", marginBottom:24, letterSpacing:"0.03em", WebkitFontSmoothing:"antialiased" }}>Введите никнейм и пароль</p>
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div>
                     <label className={label} style={LABEL_STYLE}>Никнейм</label>
@@ -577,8 +604,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
               </button>
               <div style={FORM_CARD}>
                 <div style={{ position:"absolute", inset:0, borderRadius:20, background:"linear-gradient(135deg, rgba(255,120,30,0.08) 0%, transparent 50%)", pointerEvents:"none" }} />
-                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:22, fontWeight:900, letterSpacing:"0.04em", background:"linear-gradient(135deg,#ffcc00,#ff6600)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", marginBottom:4 }}>EMAIL</h2>
-                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,160,60,0.5)", marginBottom:24 }}>Введите email — пришлём код</p>
+                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:22, fontWeight:900, letterSpacing:"0.04em", color:"#ff9000", textShadow:"0 0 20px rgba(255,140,0,0.4), 0 1px 0 rgba(120,60,0,0.5)", marginBottom:4, WebkitFontSmoothing:"antialiased" }}>EMAIL</h2>
+                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,180,80,0.75)", marginBottom:24, WebkitFontSmoothing:"antialiased" }}>Введите email — пришлём код</p>
                 <form onSubmit={handleSendCode} className="space-y-4">
                   <div>
                     <label className={label} style={LABEL_STYLE}>Email</label>
@@ -606,8 +633,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
               </button>
               <div style={FORM_CARD}>
                 <div style={{ position:"absolute", inset:0, borderRadius:20, background:"linear-gradient(135deg, rgba(255,120,30,0.08) 0%, transparent 50%)", pointerEvents:"none" }} />
-                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:22, fontWeight:900, letterSpacing:"0.04em", background:"linear-gradient(135deg,#ffcc00,#ff6600)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", marginBottom:4 }}>КОД</h2>
-                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,160,60,0.5)", marginBottom:24 }}>6-значный код на <span style={{ color:"rgba(255,200,80,0.8)" }}>{email}</span></p>
+                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:22, fontWeight:900, letterSpacing:"0.04em", color:"#ff9000", textShadow:"0 0 20px rgba(255,140,0,0.4), 0 1px 0 rgba(120,60,0,0.5)", marginBottom:4, WebkitFontSmoothing:"antialiased" }}>КОД</h2>
+                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,180,80,0.75)", marginBottom:24, WebkitFontSmoothing:"antialiased" }}>6-значный код на <span style={{ color:"#ffcc00", fontWeight:600 }}>{email}</span></p>
                 <div className="flex gap-2 mb-6">
                   {code.map((digit, idx) => (
                     <input key={idx} type="text" inputMode="numeric" maxLength={1} value={digit}
@@ -639,8 +666,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
             <div style={{ animation: "fadeSlideIn 0.4s cubic-bezier(0.22,1,0.36,1)" }}>
               <div style={FORM_CARD}>
                 <div style={{ position:"absolute", inset:0, borderRadius:20, background:"linear-gradient(135deg, rgba(255,120,30,0.08) 0%, transparent 50%)", pointerEvents:"none" }} />
-                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:20, fontWeight:900, letterSpacing:"0.04em", background:"linear-gradient(135deg,#ffcc00,#ff6600)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", marginBottom:4 }}>РЕГИСТРАЦИЯ</h2>
-                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,160,60,0.5)", marginBottom:20 }}>Создайте аккаунт</p>
+                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:20, fontWeight:900, letterSpacing:"0.04em", color:"#ff9000", textShadow:"0 0 20px rgba(255,140,0,0.4), 0 1px 0 rgba(120,60,0,0.5)", marginBottom:4, WebkitFontSmoothing:"antialiased" }}>РЕГИСТРАЦИЯ</h2>
+                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,180,80,0.75)", marginBottom:20, WebkitFontSmoothing:"antialiased" }}>Создайте аккаунт</p>
                 <form onSubmit={handleRegister} className="space-y-3">
                   {[
                     { label:"Имя и фамилия", val:displayName, set:(v:string)=>{setDisplayName(v);clearErr();}, ph:"Иван Петров", icon:null, af:true },
@@ -692,8 +719,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
             <div style={{ animation: "fadeSlideIn 0.4s cubic-bezier(0.22,1,0.36,1)" }}>
               <div style={FORM_CARD}>
                 <div style={{ position:"absolute", inset:0, borderRadius:20, background:"linear-gradient(135deg, rgba(255,120,30,0.08) 0%, transparent 50%)", pointerEvents:"none" }} />
-                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:20, fontWeight:900, letterSpacing:"0.04em", background:"linear-gradient(135deg,#ffcc00,#ff6600)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", marginBottom:4 }}>НОВЫЙ ПАРОЛЬ</h2>
-                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,160,60,0.5)", marginBottom:24 }}>Придумайте надёжный пароль</p>
+                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:20, fontWeight:900, letterSpacing:"0.04em", color:"#ff9000", textShadow:"0 0 20px rgba(255,140,0,0.4), 0 1px 0 rgba(120,60,0,0.5)", marginBottom:4, WebkitFontSmoothing:"antialiased" }}>НОВЫЙ ПАРОЛЬ</h2>
+                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,180,80,0.75)", marginBottom:24, WebkitFontSmoothing:"antialiased" }}>Придумайте надёжный пароль</p>
                 <form onSubmit={handleReset} className="space-y-4">
                   {[
                     { label:"Новый пароль", val:newPassword, set:(v:string)=>{setNewPassword(v);clearErr();}, ph:"Минимум 6 символов", af:true },
@@ -1530,10 +1557,10 @@ function AppInner() {
   return (
     <div className="flex h-screen w-screen overflow-hidden transition-colors duration-300 relative" style={{ fontFamily: FONT.body, background: T.bgDeep, color: T.text }}>
 
-      {/* ── Звёзды фона ── */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
+      {/* ── Звёзды фона (только для тёмных тем) ── */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden app-star" style={{ zIndex: 0 }}>
         {appStars.map((s, i) => (
-          <div key={i} className="absolute rounded-full" style={{
+          <div key={i} className="absolute rounded-full app-star" style={{
             left: `${s.x}%`, top: `${s.y}%`,
             width: s.size, height: s.size,
             background: s.bright ? "var(--t-accent)" : "rgba(255,255,255,0.3)",
@@ -1544,16 +1571,16 @@ function AppInner() {
 
       {/* ── 3D SIDEBAR ── */}
       <nav className="flex flex-col items-center py-3 w-[62px] gap-0.5 flex-shrink-0 relative z-10" style={{
-        background: `linear-gradient(180deg, var(--t-bg-deep) 0%, color-mix(in srgb, var(--t-bg-deep) 90%, var(--t-accent)) 100%)`,
+        background: `linear-gradient(180deg, var(--t-bg-deep) 0%, color-mix(in srgb, var(--t-bg-deep) 92%, var(--t-accent)) 100%)`,
         borderRight: "1px solid var(--t-border)",
-        boxShadow: "2px 0 20px rgba(0,0,0,0.5), inset -1px 0 0 rgba(255,255,255,0.03)",
+        boxShadow: "2px 0 16px rgba(0,0,0,0.25), inset -1px 0 0 rgba(255,255,255,0.04)",
       }}>
         {/* Лого */}
         <div className="mb-3" style={{ padding: "4px 0" }}>
-          <div style={{
+          <div className="nav-logo" style={{
             width: 36, height: 36, borderRadius: 10,
             background: `linear-gradient(145deg, color-mix(in srgb, var(--t-accent) 80%, white), var(--t-accent))`,
-            boxShadow: `0 0 16px color-mix(in srgb, var(--t-accent) 60%, transparent), 0 4px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.25)`,
+            boxShadow: `0 2px 12px color-mix(in srgb, var(--t-accent) 50%, transparent), 0 4px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.3)`,
             display: "flex", alignItems: "center", justifyContent: "center",
             transform: "perspective(200px) rotateX(6deg)",
           }}>
@@ -1604,8 +1631,8 @@ function AppInner() {
           <button title={currentUser.display_name} onClick={() => setSection("settings")} style={{
             width: 34, height: 34, borderRadius: 10, flexShrink: 0,
             background: `linear-gradient(145deg, var(--t-bg-card), var(--t-bg-panel))`,
-            border: `1px solid color-mix(in srgb, var(--t-accent) 40%, var(--t-border))`,
-            boxShadow: `0 0 10px color-mix(in srgb, var(--t-accent) 25%, transparent), 0 2px 6px rgba(0,0,0,0.4)`,
+            border: `2px solid color-mix(in srgb, var(--t-accent) 50%, var(--t-border))`,
+            boxShadow: `0 2px 8px rgba(0,0,0,0.15)`,
             display: "flex", alignItems: "center", justifyContent: "center",
             fontFamily: FONT.heading, fontWeight: 700, fontSize: 11,
             color: "var(--t-accent)", cursor: "pointer",

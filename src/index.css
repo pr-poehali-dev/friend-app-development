@@ -169,26 +169,33 @@ body[data-theme="telegram"] {
   --t-chat-pattern: none;
 }
 
-/* === ТЕМА: Светлая (WhatsApp Light) === */
+/* === ТЕМА: Светлая === */
 body[data-theme="light"] {
-  --t-bg-deep: #f0f2f5;
+  --t-bg-deep: #e8edf2;
   --t-bg-main: #ffffff;
-  --t-bg-panel: #f0f2f5;
-  --t-bg-hover: #f5f6f6;
-  --t-bg-active: #e9edef;
+  --t-bg-panel: #f2f5f8;
+  --t-bg-hover: #eaf0f5;
+  --t-bg-active: #dde8f0;
   --t-bg-card: #ffffff;
-  --t-border: #e9edef;
-  --t-border-md: #d1d7db;
-  --t-accent: #00a884;
-  --t-accent-2: #008f72;
-  --t-text: #111b21;
-  --t-text-muted: #54656f;
-  --t-text-dim: #8696a0;
-  --t-placeholder: #d1d7db;
-  --t-msg-own-bg: #d9fdd3;
-  --t-msg-own-br: #c8f0bf;
-  --t-chat-bg: #efeae2;
-  --t-chat-pattern: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23c8bfb0' fill-opacity='0.4'%3E%3Cpath d='M0 0h1v1H0zm2 0h1v1H2zm2 0h1v1H4zm2 0h1v1H6zm2 0h1v1H8zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1z'/%3E%3C/g%3E%3C/svg%3E");
+  --t-border: #c8d5de;
+  --t-border-md: #a8bdc9;
+  --t-accent: #007a63;
+  --t-accent-2: #005f4d;
+  --t-text: #0d1b22;
+  --t-text-muted: #2d4a58;
+  --t-text-dim: #5a7a8a;
+  --t-placeholder: #a8bdc9;
+  --t-online: #16a34a;
+  --t-danger: #dc2626;
+  --t-msg-own-bg: #c5f0c0;
+  --t-msg-own-br: #a8e0a0;
+  --t-chat-bg: #dde8f0;
+  --t-chat-pattern: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23a8bdc9' fill-opacity='0.35'%3E%3Cpath d='M0 0h1v1H0zm2 0h1v1H2zm2 0h1v1H4zm2 0h1v1H6zm2 0h1v1H8zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1zm2 0h1v1h-1z'/%3E%3C/g%3E%3C/svg%3E");
+
+  /* Флаг: светлая тема — отключаем тёмные тени/glow */
+  --t-is-light: 1;
+  --t-shadow-strength: 0.08;
+  --t-glow-strength: 0.3;
 }
 
 /* === ТЕМА: Розово-фиолетовая === */
@@ -257,6 +264,128 @@ body[data-theme="teal"] {
   --t-chat-pattern: none;
 }
 
+/* ===== СВЕТЛАЯ ТЕМА: переопределения компонентов ===== */
+
+/* Скроллбар */
+body[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: #a8bdc9;
+}
+body[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: #7a9db0;
+}
+
+/* Звёзды — скрыть в светлой теме */
+body[data-theme="light"] .app-star {
+  display: none;
+}
+
+/* Nav sidebar */
+body[data-theme="light"] nav {
+  box-shadow: 2px 0 12px rgba(0, 80, 120, 0.12) !important;
+}
+
+/* Кнопки nav активные */
+body[data-theme="light"] .nav-item-active {
+  animation: none !important;
+}
+
+/* card3d в светлой теме — убираем тёмные тени */
+body[data-theme="light"] .card-float {
+  animation: none !important;
+  box-shadow:
+    0 2px 12px rgba(0, 80, 120, 0.1),
+    0 1px 4px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Текст — чёткий, без glow */
+body[data-theme="light"] .msg-sender {
+  text-shadow: none !important;
+  filter: none !important;
+  color: var(--t-accent) !important;
+  font-weight: 700;
+}
+
+/* Пузыри сообщений */
+body[data-theme="light"] .msg-text {
+  color: var(--t-text) !important;
+}
+
+/* Иконки — убираем glow */
+body[data-theme="light"] .live-icon-dim {
+  filter: none !important;
+  animation: none !important;
+  color: var(--t-accent) !important;
+}
+
+/* Бейджи без glow */
+body[data-theme="light"] [style*="badgePulse"] {
+  animation: badgePulseLight 2s ease-in-out infinite !important;
+}
+
+/* btn-3d в светлой теме */
+body[data-theme="light"] .btn-3d {
+  box-shadow:
+    0 3px 0 color-mix(in srgb, var(--t-accent) 70%, #000),
+    0 4px 10px rgba(0, 122, 99, 0.25) !important;
+  color: #ffffff !important;
+}
+body[data-theme="light"] .btn-3d:hover {
+  box-shadow:
+    0 5px 0 color-mix(in srgb, var(--t-accent) 70%, #000),
+    0 6px 16px rgba(0, 122, 99, 0.35) !important;
+  transform: perspective(200px) rotateX(4deg) translateY(-2px) !important;
+}
+
+/* Поля ввода */
+body[data-theme="light"] input,
+body[data-theme="light"] textarea {
+  color: #0d1b22 !important;
+}
+body[data-theme="light"] input::placeholder,
+body[data-theme="light"] textarea::placeholder {
+  color: #a8bdc9 !important;
+}
+
+/* Heading3d без glow в светлой */
+body[data-theme="light"] .heading-3d {
+  filter: none !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.08) !important;
+  color: var(--t-text) !important;
+}
+
+/* Анимации badge для светлой темы */
+@keyframes badgePulseLight {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px rgba(0, 122, 99, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(0, 122, 99, 0.15);
+  }
+}
+
+/* iconLive в светлой — без glow */
+body[data-theme="light"] [style*="iconLive"] {
+  filter: none !important;
+}
+
+/* AvatarBadge в светлой — убираем glow */
+body[data-theme="light"] [style*="drop-shadow"] {
+  filter: none !important;
+}
+
+/* Лого в nav */
+body[data-theme="light"] .nav-logo {
+  box-shadow:
+    0 2px 8px rgba(0, 122, 99, 0.3),
+    0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Активный nav элемент */
+body[data-theme="light"] .nav-active-btn {
+  box-shadow: 0 2px 8px rgba(0, 122, 99, 0.15) !important;
+}
+
 /* ===== ГЛОБАЛЬНЫЕ СТИЛИ ПРИЛОЖЕНИЯ ===== */
 
 * {
@@ -279,9 +408,32 @@ body[data-theme="teal"] {
   background: var(--t-border-md, #2a3548);
 }
 
-/* Шрифт по умолчанию */
+/* Шрифт по умолчанию и чёткий рендеринг */
 body[data-theme] {
   font-family: "Space Grotesk", "IBM Plex Sans", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Чёткий текст везде — никаких размытий */
+body[data-theme] * {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Запрет на filter: blur на текстовых элементах */
+body[data-theme] h1,
+body[data-theme] h2,
+body[data-theme] h3,
+body[data-theme] p,
+body[data-theme] span,
+body[data-theme] input,
+body[data-theme] button,
+body[data-theme] label {
+  /* Убираем backdrop-filter-induced blur */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
 }
 
 /* ===== ГЛОБАЛЬНЫЕ АНИМАЦИИ ===== */
