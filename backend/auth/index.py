@@ -39,7 +39,7 @@ def handler(event: dict, context) -> dict:
             cur = conn.cursor()
             cur.execute(
                 """SELECT u.id, u.username, u.display_name, u.position, u.department,
-                          u.phone, u.avatar_initials, u.online
+                          u.phone, u.avatar_initials, u.online, u.role
                    FROM sessions s
                    JOIN users u ON u.id = s.user_id
                    WHERE s.token = %s AND s.expires_at > NOW()""",
@@ -51,7 +51,7 @@ def handler(event: dict, context) -> dict:
             user = {
                 "id": row[0], "username": row[1], "display_name": row[2],
                 "position": row[3], "department": row[4], "phone": row[5],
-                "avatar_initials": row[6], "online": row[7]
+                "avatar_initials": row[6], "online": row[7], "role": row[8]
             }
             return {"statusCode": 200, "headers": CORS, "body": json.dumps({"user": user})}
         finally:
@@ -70,7 +70,7 @@ def handler(event: dict, context) -> dict:
         try:
             cur = conn.cursor()
             cur.execute(
-                "SELECT id, display_name, password_hash, position, department, phone, avatar_initials FROM users WHERE username = %s",
+                "SELECT id, display_name, password_hash, position, department, phone, avatar_initials, role FROM users WHERE username = %s",
                 (username,)
             )
             row = cur.fetchone()
@@ -90,7 +90,7 @@ def handler(event: dict, context) -> dict:
             user = {
                 "id": user_id, "username": username, "display_name": row[1],
                 "position": row[3], "department": row[4], "phone": row[5],
-                "avatar_initials": row[6], "online": True
+                "avatar_initials": row[6], "online": True, "role": row[7]
             }
             return {"statusCode": 200, "headers": CORS, "body": json.dumps({"token": token, "user": user})}
         finally:

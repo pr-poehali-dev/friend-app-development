@@ -84,7 +84,7 @@ def handler(event: dict, context) -> dict:
             cur.execute(
                 f"""SELECT m.id, m.text, m.msg_type, m.file_name, m.file_size, m.file_url,
                           m.created_at, m.sender_id,
-                          u.display_name, u.avatar_initials
+                          u.display_name, u.avatar_initials, u.avatar_url
                    FROM {t('messages')} m JOIN {t('users')} u ON u.id = m.sender_id
                    WHERE m.chat_id = %s
                    ORDER BY m.created_at ASC
@@ -104,6 +104,7 @@ def handler(event: dict, context) -> dict:
                     "sender_id": r[7],
                     "sender_name": r[8],
                     "sender_avatar": r[9],
+                    "sender_avatar_url": r[10],
                     "own": r[7] == user_id,
                 }
                 for r in rows

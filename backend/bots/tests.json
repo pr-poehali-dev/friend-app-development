@@ -1,0 +1,7 @@
+{
+  "tests": [
+    {"name": "OPTIONS preflight", "method": "OPTIONS", "path": "/", "expectedStatus": 200},
+    {"name": "GET bots — unauthorized", "method": "GET", "path": "/", "expectedStatus": 401},
+    {"name": "POST chat — unauthorized", "method": "POST", "path": "/chat", "body": {"bot_id": 1, "message": "Привет"}, "expectedStatus": 401}
+  ]
+}

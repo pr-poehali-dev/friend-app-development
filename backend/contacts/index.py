@@ -166,7 +166,7 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             """SELECT ec.id, ec.display_name, ec.phone, ec.email, ec.position, ec.department,
                       ec.avatar_initials, ec.notes, ec.source, ec.linked_user_id, ec.created_at,
-                      u.online
+                      u.online, u.avatar_url
                FROM external_contacts ec
                LEFT JOIN users u ON u.id = ec.linked_user_id
                WHERE ec.owner_id = %s
@@ -182,6 +182,7 @@ def handler(event: dict, context) -> dict:
                 "notes": r[7], "source": r[8], "linked_user_id": r[9],
                 "created_at": r[10].isoformat() if r[10] else None,
                 "online": r[11] or False,
+                "avatar_url": r[12],
             }
             for r in rows
         ]

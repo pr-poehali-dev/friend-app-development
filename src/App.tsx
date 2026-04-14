@@ -88,6 +88,7 @@ const API = {
   contacts: "https://functions.poehali.dev/5c7f4e46-aec0-4fab-8215-3c55c316f3a3",
   fileUpload: "https://functions.poehali.dev/19819ee8-2dfb-41ae-90b2-13698b6ffa77",
   userFiles: "https://functions.poehali.dev/69211784-1643-4e44-a39e-dc0a506fcc08",
+  bots: "https://functions.poehali.dev/7f596567-baf9-40fb-adea-97045136e1f3",
 };
 
 type Section = "chats" | "contacts" | "calls" | "video" | "files" | "bots" | "settings" | "analytics";
@@ -103,6 +104,7 @@ interface User {
   avatar_initials: string;
   avatar_url?: string;
   online: boolean;
+  role?: string;
 }
 
 interface Chat {
@@ -171,9 +173,38 @@ const STATIC_BOTS = [
 
 
 
-function AvatarBadge({ initials, size = "md", online }: { initials: string; size?: "sm" | "md" | "lg"; online?: boolean }) {
-  const px = { sm: 32, md: 40, lg: 48 }[size];
-  const fs = { sm: 11, md: 13, lg: 15 }[size];
+function AvatarBadge({ initials, size = "md", online, avatar_url }: { initials: string; size?: "sm" | "md" | "lg" | "xl"; online?: boolean; avatar_url?: string }) {
+  const sizes = { sm: 32, md: 40, lg: 48, xl: 64 };
+  const px = sizes[size];
+  const fs = { sm: 11, md: 13, lg: 15, xl: 20 }[size];
+
+  if (avatar_url) {
+    return (
+      <div style={{ position: "relative", display: "inline-flex" }}>
+        <img
+          src={avatar_url}
+          alt={initials}
+          style={{
+            width: sizes[size], height: sizes[size],
+            borderRadius: size === "xl" ? 20 : size === "lg" ? 16 : size === "sm" ? 8 : 12,
+            objectFit: "cover",
+            border: "2px solid color-mix(in srgb, var(--t-accent) 30%, transparent)",
+          }}
+        />
+        {online !== undefined && (
+          <div style={{
+            position: "absolute", bottom: 0, right: 0,
+            width: size === "sm" ? 7 : 9, height: size === "sm" ? 7 : 9,
+            borderRadius: "50%",
+            background: online ? "var(--t-online)" : "var(--t-text-dim)",
+            border: "2px solid var(--t-bg-panel)",
+            boxShadow: online ? "0 0 6px var(--t-online)" : undefined,
+          }} />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex-shrink-0">
       <div style={{
@@ -1246,6 +1277,10 @@ function AppInner() {
   const isMobile = useIsMobile();
   const { t } = useLang();
 
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
   const navItems = [
     { id: "chats" as Section, icon: "MessageSquare", label: t("nav_chats") },
     { id: "contacts" as Section, icon: "Users", label: t("nav_contacts") },
@@ -1253,15 +1288,12 @@ function AppInner() {
     { id: "video" as Section, icon: "Video", label: t("nav_video") },
     { id: "files" as Section, icon: "FolderOpen", label: t("nav_files") },
     { id: "bots" as Section, icon: "Bot", label: t("nav_bots") },
+    ...(currentUser?.role === "admin" ? [{ id: "analytics" as Section, icon: "BarChart2", label: t("nav_analytics") }] : []),
   ];
 
   const bottomNav = [
     { id: "settings" as Section, icon: "Settings", label: t("nav_settings") },
-    { id: "analytics" as Section, icon: "BarChart2", label: t("nav_analytics") },
   ];
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [sessionToken, setSessionToken] = useState<string | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
 
   const [section, setSection] = useState<Section>("chats");
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false); // true = открыт чат/карточка, false = список
@@ -1305,6 +1337,12 @@ function AppInner() {
   const [contactSearch, setContactSearch] = useState("");
   const [showAddContact, setShowAddContact] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [bots, setBots] = useState<{id:number;name:string;description:string;category:string;avatar:string;active:boolean;requests:number}[]>([]);
+  const [loadingBots, setLoadingBots] = useState(false);
+  const [activeBotId, setActiveBotId] = useState<number|null>(null);
+  const [botMessages, setBotMessages] = useState<{id:number;role:string;content:string;time:string}[]>([]);
+  const [botInput, setBotInput] = useState("");
+  const [sendingBotMsg, setSendingBotMsg] = useState(false);
   const [externalContacts, setExternalContacts] = useState<{id:number;display_name:string;phone?:string;email?:string;position?:string;department?:string;avatar_initials:string;online:boolean;source:string;linked_user_id?:number}[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const inviteCode = new URLSearchParams(window.location.search).get("invite");
@@ -1556,6 +1594,57 @@ function AppInner() {
     if (section === "files" && sessionToken) loadUserFiles();
   }, [section, sessionToken]);
 
+  const loadBots = useCallback(async () => {
+    if (!sessionToken) return;
+    setLoadingBots(true);
+    try {
+      const res = await fetch(API.bots, { headers: authHeaders() });
+      const data = await res.json();
+      if (data.bots) setBots(data.bots);
+    } finally {
+      setLoadingBots(false);
+    }
+  }, [sessionToken]);
+
+  useEffect(() => {
+    if (section === "bots" && sessionToken) loadBots();
+  }, [section, sessionToken]);
+
+  const loadBotHistory = async (botId: number) => {
+    const res = await fetch(`${API.bots}/history?bot_id=${botId}`, { headers: authHeaders() });
+    const data = await res.json();
+    if (data.messages) setBotMessages(data.messages);
+  };
+
+  const sendBotMessage = async () => {
+    if (!activeBotId || !botInput.trim() || sendingBotMsg) return;
+    const msg = botInput.trim();
+    setBotInput("");
+    setSendingBotMsg(true);
+    // Optimistic
+    setBotMessages(prev => [...prev, { id: Date.now(), role: "user", content: msg, time: new Date().toLocaleTimeString("ru", {hour:"2-digit",minute:"2-digit"}) }]);
+    try {
+      const res = await fetch(`${API.bots}/chat`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ bot_id: activeBotId, message: msg }),
+      });
+      const data = await res.json();
+      if (data.bot_message) {
+        setBotMessages(prev => [...prev, data.bot_message]);
+      }
+    } finally {
+      setSendingBotMsg(false);
+    }
+  };
+
+  // Запрос разрешения на push-уведомления
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
   // Проверка входящих звонков каждые 3 секунды
   useEffect(() => {
     if (!sessionToken) return;
@@ -1563,7 +1652,17 @@ function AppInner() {
       if (activeCallId) return;
       const res = await fetch(`${API.calls}/incoming`, { headers: authHeaders() });
       const data = await res.json();
-      if (data.call) setIncomingCall(data.call);
+      if (data.call) {
+        setIncomingCall(data.call);
+        // Push notification
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification(`📞 Входящий ${data.call.call_type === "video" ? "видео" : "аудио"}звонок`, {
+            body: data.call.caller_name,
+            icon: "/favicon.ico",
+            tag: `call-${data.call.id}`,
+          });
+        }
+      }
     }, 3000);
     return () => clearInterval(iv);
   }, [sessionToken, activeCallId]);
@@ -2026,7 +2125,7 @@ function AppInner() {
                         : "transparent",
                       borderLeft: activeChat?.id === chat.id ? `3px solid var(--t-accent)` : "3px solid transparent",
                     }}>
-                    <AvatarBadge initials={chat.avatar} online={chat.type === "personal" ? chat.online : undefined} />
+                    <AvatarBadge initials={chat.avatar} online={chat.type === "personal" ? chat.online : undefined} avatar_url={chat.type === "personal" ? (chat as { avatar_url?: string }).avatar_url : undefined} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-0.5">
                         <span style={{ fontFamily: FONT.heading, fontWeight: 600, fontSize: 13, color: "var(--t-text)", letterSpacing: "0.02em" }} className="truncate">{chat.name}</span>
@@ -2063,7 +2162,7 @@ function AppInner() {
                           <Icon name="ChevronLeft" size={20} />
                         </button>
                       )}
-                      <AvatarBadge initials={activeChat.avatar} online={activeChat.type === "personal" ? activeChat.online : undefined} />
+                      <AvatarBadge initials={activeChat.avatar} online={activeChat.type === "personal" ? activeChat.online : undefined} avatar_url={activeChat.type === "personal" ? (activeChat as { avatar_url?: string }).avatar_url : undefined} />
                       <div>
                         <div style={{ fontFamily: FONT.heading, fontWeight: 700, fontSize: 14, color: "var(--t-text)", letterSpacing: "0.05em", filter: "drop-shadow(0 1px 4px color-mix(in srgb, var(--t-accent) 30%, transparent))" }}>{activeChat.name}</div>
                         <div style={{ fontFamily: FONT.body, fontSize: 11, color: activeChat.online ? "var(--t-online)" : "var(--t-text-dim)" }}>
@@ -2105,7 +2204,7 @@ function AppInner() {
                     {messages.map((msg, mi) => (
                       <div key={msg.id} className={`flex items-end gap-2 ${msg.own ? "flex-row-reverse" : ""}`}
                         style={{ animation: `msgIn 0.25s ease ${mi * 0.03}s both` }}>
-                        {!msg.own && <AvatarBadge initials={msg.sender_avatar || "??"} size="sm" />}
+                        {!msg.own && <AvatarBadge initials={msg.sender_avatar || "??"} size="sm" avatar_url={(msg as { sender_avatar_url?: string }).sender_avatar_url} />}
                         <div className={`max-w-[68%] flex flex-col gap-1 ${msg.own ? "items-end" : "items-start"}`}>
                           {!msg.own && (
                             <span className="msg-sender ml-2" style={{ color: "var(--t-accent)" }}>{msg.sender_name}</span>
@@ -2303,7 +2402,7 @@ function AppInner() {
                       <div key={`${c.source}-${c.id}`} className="p-4 transition-all" style={{ ...card3d(), animation: "card3dFloat 4s ease-in-out infinite", animationDelay: `${index * 0.15}s` }}>
                         <div className="flex items-center gap-3 mb-3">
                           <div style={{ boxShadow: c.online ? "0 0 6px var(--t-online)" : undefined, borderRadius: "50%" }}>
-                            <AvatarBadge initials={c.avatar_initials} size="lg" online={c.online} />
+                            <AvatarBadge initials={c.avatar_initials} size="lg" online={c.online} avatar_url={(c as { avatar_url?: string }).avatar_url} />
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="text-sm font-medium truncate" style={{ fontFamily: FONT.heading, fontWeight: 700, color: "var(--t-text)" }}>{c.display_name}</div>
@@ -2683,40 +2782,163 @@ function AppInner() {
 
         {/* BOTS */}
         {section === "bots" && (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="px-6 pt-5 pb-4 border-b flex items-center justify-between flex-shrink-0" style={{ borderColor: "var(--t-border)", background: "linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))" }}>
-              <div>
+          <div className="flex flex-1 overflow-hidden">
+            {/* Sidebar — list of bots */}
+            <div style={{
+              width: isMobile && activeBotId ? 0 : isMobile ? "100%" : 300,
+              flexShrink: 0, display: "flex", flexDirection: "column",
+              borderRight: "1px solid var(--t-border)",
+              overflow: "hidden", transition: "width 0.2s",
+              background: "linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 4%, var(--t-bg-main)), var(--t-bg-main))",
+            }}>
+              <div className="px-4 pt-4 pb-3 border-b flex items-center justify-between" style={{ borderColor: "var(--t-border)" }}>
                 <h2 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>{t("bots_title")}</h2>
-                <p className="text-xs mt-0.5" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{t("bots_sub")}</p>
+                {loadingBots && <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--t-accent)", borderTopColor: "transparent" }} />}
               </div>
-              <button className="btn-3d px-3 py-1.5 text-xs flex items-center gap-1.5" style={{ ...btn3d("var(--t-accent)") }}>
-                <Icon name="Plus" size={12} /> {t("bots_create")}
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto px-6 py-5">
-              <div className={`grid gap-4 ${isMobile ? "grid-cols-1" : "grid-cols-3"}`}>
-                {STATIC_BOTS.map((bot, index) => (
-                  <div key={bot.id} className="p-4 transition-all" style={{ ...card3d(), animation: "card3dFloat 4s ease-in-out infinite", animationDelay: `${index * 0.2}s` }}>
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-10 h-10 rounded-sm flex items-center justify-center text-xs font-medium" style={{ ...card3d(), padding: 0 }}>
-                          <span style={liveIcon(index * 0.3)}>{bot.avatar}</span>
-                        </div>
-                        <div>
-                          <div className="text-xs" style={{ fontFamily: FONT.heading, fontWeight: 700, color: "var(--t-text)" }}>{bot.name}</div>
-                          <div className="text-[10px]" style={{ fontFamily: FONT.body, color: "var(--t-accent)" }}>{bot.category}</div>
-                        </div>
-                      </div>
-                      <div className="w-2 h-2 rounded-full mt-1" style={{ background: bot.active ? "#22c55e" : "var(--t-text-dim)", boxShadow: bot.active ? "0 0 6px var(--t-online)" : undefined }} />
+              <div className="flex-1 overflow-y-auto">
+                {(bots.length > 0 ? bots : STATIC_BOTS).map((bot, index) => (
+                  <div key={bot.id}
+                    onClick={() => { setActiveBotId(bot.id); setBotMessages([]); loadBotHistory(bot.id); }}
+                    className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors"
+                    style={{
+                      borderBottom: "1px solid var(--t-bg-panel)",
+                      background: activeBotId === bot.id ? "color-mix(in srgb, var(--t-accent) 10%, transparent)" : undefined,
+                    }}>
+                    <div style={{
+                      width: 40, height: 40, borderRadius: 12,
+                      background: `linear-gradient(135deg, var(--t-accent), color-mix(in srgb, var(--t-accent) 50%, #1e3a8a))`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontFamily: FONT.mono, fontWeight: 700, fontSize: 11, color: "#fff",
+                      flexShrink: 0,
+                    }}>
+                      {bot.avatar}
                     </div>
-                    <p className="text-[11px] leading-relaxed mb-3" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{bot.description}</p>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono" style={{ fontFamily: FONT.mono, color: "var(--t-text-dim)" }}>{bot.requests.toLocaleString()} {t("bots_requests")}</span>
-                      <button className="btn-3d px-2 py-1 text-[10px]" style={{ ...btn3d("var(--t-accent)") }}>{t("bots_open")}</button>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium truncate" style={{ fontFamily: FONT.heading, fontWeight: 700, color: "var(--t-text)" }}>{bot.name}</div>
+                      <div className="text-[10px] truncate" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{bot.description}</div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="w-2 h-2 rounded-full" style={{ background: bot.active ? "#22c55e" : "var(--t-text-dim)", boxShadow: bot.active ? "0 0 5px #22c55e" : undefined }} />
+                      <span className="text-[9px] font-mono" style={{ color: "var(--t-text-dim)" }}>{bot.requests}</span>
                     </div>
                   </div>
                 ))}
+                {bots.length === 0 && !loadingBots && (
+                  <div className="flex flex-col items-center justify-center py-8 gap-2">
+                    <Icon name="Bot" size={28} style={liveIcon(0)} />
+                    <span style={{ ...heading3d(10), letterSpacing: "0.1em" }}>НЕТ БОТОВ</span>
+                  </div>
+                )}
               </div>
+            </div>
+
+            {/* Chat with bot */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {activeBotId ? (() => {
+                const bot = (bots.length > 0 ? bots : STATIC_BOTS).find(b => b.id === activeBotId);
+                return (
+                  <>
+                    {/* Bot header */}
+                    <div className="px-4 py-3 border-b flex items-center gap-3 flex-shrink-0"
+                      style={{ borderColor: "var(--t-border)", background: "color-mix(in srgb, var(--t-accent) 4%, var(--t-bg-main))" }}>
+                      {isMobile && (
+                        <button onClick={() => setActiveBotId(null)} style={{ color: "var(--t-text-dim)" }}>
+                          <Icon name="ChevronLeft" size={18} />
+                        </button>
+                      )}
+                      <div style={{
+                        width: 36, height: 36, borderRadius: 10,
+                        background: "linear-gradient(135deg, var(--t-accent), #1e3a8a)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontFamily: FONT.mono, fontWeight: 700, fontSize: 11, color: "#fff", flexShrink: 0,
+                      }}>
+                        {bot?.avatar}
+                      </div>
+                      <div>
+                        <div style={{ fontFamily: FONT.heading, fontWeight: 700, fontSize: 13, color: "var(--t-text)" }}>{bot?.name}</div>
+                        <div style={{ fontFamily: FONT.body, fontSize: 10, color: "#22c55e" }}>● онлайн</div>
+                      </div>
+                    </div>
+
+                    {/* Messages */}
+                    <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+                      {botMessages.length === 0 && (
+                        <div className="flex flex-col items-center justify-center h-full gap-3 opacity-60">
+                          <Icon name="Bot" size={32} style={liveIcon(0)} />
+                          <span style={{ fontFamily: FONT.body, fontSize: 12, color: "var(--t-text-dim)" }}>Напишите вопрос боту</span>
+                        </div>
+                      )}
+                      {botMessages.map(msg => (
+                        <div key={msg.id} className={`flex items-end gap-2 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
+                          {msg.role === "assistant" && (
+                            <div style={{
+                              width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                              background: "linear-gradient(135deg, var(--t-accent), #1e3a8a)",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              fontFamily: FONT.mono, fontSize: 9, fontWeight: 700, color: "#fff",
+                            }}>
+                              {bot?.avatar}
+                            </div>
+                          )}
+                          <div className={`max-w-[70%] px-3 py-2 rounded-2xl text-xs leading-relaxed`}
+                            style={{
+                              background: msg.role === "user"
+                                ? `linear-gradient(135deg, var(--t-accent), color-mix(in srgb, var(--t-accent) 70%, #1e3a8a))`
+                                : "var(--t-bg-panel)",
+                              color: msg.role === "user" ? "#fff" : "var(--t-text)",
+                              fontFamily: FONT.body,
+                              border: msg.role === "assistant" ? "1px solid var(--t-border)" : "none",
+                              whiteSpace: "pre-wrap",
+                            }}>
+                            {msg.content}
+                          </div>
+                          <span style={{ fontFamily: FONT.mono, fontSize: 9, color: "var(--t-text-dim)", flexShrink: 0 }}>{msg.time}</span>
+                        </div>
+                      ))}
+                      {sendingBotMsg && (
+                        <div className="flex items-end gap-2">
+                          <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, var(--t-accent), #1e3a8a)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT.mono, fontSize: 9, fontWeight: 700, color: "#fff" }}>
+                            {bot?.avatar}
+                          </div>
+                          <div className="px-3 py-2 rounded-2xl" style={{ background: "var(--t-bg-panel)", border: "1px solid var(--t-border)" }}>
+                            <div className="flex gap-1">
+                              {[0,1,2].map(i => (
+                                <div key={i} className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: "var(--t-accent)", animationDelay: `${i*0.15}s` }} />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Input */}
+                    <div className="px-4 py-3 flex-shrink-0" style={{ borderTop: "1px solid var(--t-border)" }}>
+                      <div className="flex items-center gap-2 px-3 py-2"
+                        style={{ background: "var(--t-bg-panel)", border: "1px solid var(--t-border)", borderRadius: 14 }}>
+                        <input
+                          value={botInput}
+                          onChange={e => setBotInput(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendBotMessage(); } }}
+                          placeholder="Напишите сообщение..."
+                          className="flex-1 bg-transparent focus:outline-none text-xs"
+                          style={{ color: "var(--t-text)", fontFamily: FONT.body }}
+                        />
+                        <button onClick={sendBotMessage} disabled={!botInput.trim() || sendingBotMsg}
+                          className="btn-3d flex items-center justify-center disabled:opacity-40 flex-shrink-0"
+                          style={{ ...btn3d("var(--t-accent)"), width: 32, height: 32, padding: 0 }}>
+                          <Icon name="Send" size={13} style={{ color: "#fff" }} />
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                );
+              })() : (
+                <div className="flex-1 flex flex-col items-center justify-center gap-3 opacity-60">
+                  <Icon name="Bot" size={40} style={liveIcon(0)} />
+                  <span style={{ ...heading3d(12), letterSpacing: "0.1em" }}>{t("bots_sub")}</span>
+                  <span style={{ fontFamily: FONT.body, fontSize: 12, color: "var(--t-text-dim)" }}>Выберите бота слева</span>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -2732,7 +2954,7 @@ function AppInner() {
         )}
 
         {/* ANALYTICS */}
-        {section === "analytics" && (
+        {section === "analytics" && currentUser?.role === "admin" && (
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="px-6 pt-5 pb-4 border-b flex items-center justify-between flex-shrink-0" style={{ borderColor: "var(--t-border)", background: "linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))" }}>
               <div>

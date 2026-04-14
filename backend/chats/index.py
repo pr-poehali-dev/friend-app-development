@@ -91,9 +91,10 @@ def handler(event: dict, context) -> dict:
                 display_name = chat_name
                 avatar = None
                 other_online = False
+                other_avatar_url = None
                 if chat_type == "personal":
                     cur.execute(
-                        """SELECT u.display_name, u.avatar_initials, u.online
+                        """SELECT u.display_name, u.avatar_initials, u.online, u.avatar_url
                            FROM chat_members cm JOIN users u ON u.id = cm.user_id
                            WHERE cm.chat_id = %s AND cm.user_id != %s LIMIT 1""",
                         (chat_id, user_id)
@@ -103,6 +104,7 @@ def handler(event: dict, context) -> dict:
                         display_name = other[0]
                         avatar = other[1]
                         other_online = other[2]
+                        other_avatar_url = other[3]
                 else:
                     # Для группового — первые буквы слов названия
                     words = (chat_name or "ГЧ").split()
@@ -114,6 +116,7 @@ def handler(event: dict, context) -> dict:
                     "type": chat_type,
                     "name": display_name,
                     "avatar": avatar or "??",
+                    "avatar_url": other_avatar_url,
                     "online": other_online,
                     "last_message": last_text or "",
                     "last_time": last_time.strftime("%H:%M") if last_time else "",
