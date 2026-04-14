@@ -12,6 +12,7 @@ POST /notifications/read — пометить уведомления прочи�
 """
 import json
 import os
+import re
 import secrets
 import csv
 import io
@@ -50,20 +51,27 @@ def initials_from_name(name: str) -> str:
     return name[:2].upper() if name else "??"
 
 
+def normalize_path(raw_path: str) -> str:
+    """Убирает UUID функции из начала пути: /uuid/invites -> /invites"""
+    p = re.sub(r'^/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '', raw_path)
+    return p or "/"
+
+
 def handler(event: dict, context) -> dict:
+    """Управление контактами и инвайт-ссылками."""
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS, "body": ""}
 
     method = event.get("httpMethod", "GET")
-    path = event.get("path", "/")
+    path = normalize_path(event.get("path", "/"))
     headers = event.get("headers") or {}
-    session_id = headers.get("X-Session-Id") or (event.get("queryStringParameters") or {}).get("session_id")
+    session_id = headers.get("X-Session-Id") or headers.get("x-session-id") or (event.get("queryStringParameters") or {}).get("session_id")
 
     conn = get_conn()
     cur = conn.cursor()
 
-    # Публичный эндпоинт: GET /invite/{code}
-    if method == "GET" and "/invite/" in path:
+    # ── Публичный: GET /invite/{code} ──
+    if method == "GET" and path.startswith("/invite/"):
         code = path.split("/invite/")[-1].strip("/")
         cur.execute(
             "SELECT id, label, created_by, used_count, max_uses, expires_at FROM invites WHERE code = %s",
@@ -90,8 +98,8 @@ def handler(event: dict, context) -> dict:
             })
         }
 
-    # Публичный эндпоинт: POST /join — принять инвайт
-    if method == "POST" and path.endswith("/join"):
+    # ── Публичный: POST /join ──
+    if method == "POST" and path == "/join":
         body = json.loads(event.get("body") or "{}")
         code = body.get("code")
         user = get_user_by_session(cur, session_id)
@@ -107,7 +115,6 @@ def handler(event: dict, context) -> dict:
         if max_uses and used_count >= max_uses:
             conn.close()
             return {"statusCode": 410, "headers": CORS, "body": json.dumps({"error": "Лимит использований исчерпан"})}
-        # Добавляем в external_contacts создателю инвайта
         cur.execute(
             "SELECT id FROM external_contacts WHERE owner_id = %s AND linked_user_id = %s",
             (created_by, user["id"])
@@ -118,7 +125,6 @@ def handler(event: dict, context) -> dict:
                    SELECT %s, display_name, phone, email, avatar_initials, 'invite', id FROM users WHERE id = %s""",
                 (created_by, user["id"])
             )
-        # Добавляем создателя инвайта в контакты пришедшего
         cur.execute(
             "SELECT id FROM external_contacts WHERE owner_id = %s AND linked_user_id = %s",
             (user["id"], created_by)
@@ -130,7 +136,6 @@ def handler(event: dict, context) -> dict:
                 (user["id"], created_by)
             )
         cur.execute("UPDATE invites SET used_count = used_count + 1 WHERE id = %s", (invite_id,))
-        # Уведомление владельцу ссылки
         cur.execute(
             """INSERT INTO notifications (user_id, type, title, body, data)
                VALUES (%s, 'invite_join', %s, %s, %s)""",
@@ -145,7 +150,7 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True, "message": "Вы добавлены в список контактов"})}
 
-    # Далее требуется авторизация
+    # ── Требуется авторизация ──
     user = get_user_by_session(cur, session_id)
     if not user:
         conn.close()
@@ -153,8 +158,8 @@ def handler(event: dict, context) -> dict:
 
     user_id = user["id"]
 
-    # GET / — список внешних контактов
-    if method == "GET" and not "/invite" in path:
+    # ── GET / — список внешних контактов ──
+    if method == "GET" and path == "/":
         cur.execute(
             """SELECT ec.id, ec.display_name, ec.phone, ec.email, ec.position, ec.department,
                       ec.avatar_initials, ec.notes, ec.source, ec.linked_user_id, ec.created_at,
@@ -179,27 +184,8 @@ def handler(event: dict, context) -> dict:
         ]
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"contacts": contacts})}
 
-    # POST / — добавить контакт вручную
-    if method == "POST" and not any(x in path for x in ["/import", "/invite", "/join"]):
-        body = json.loads(event.get("body") or "{}")
-        name = (body.get("display_name") or "").strip()
-        if not name:
-            conn.close()
-            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "Укажите имя"})}
-        cur.execute(
-            """INSERT INTO external_contacts (owner_id, display_name, phone, email, position, department, avatar_initials, notes, source)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'manual')
-               RETURNING id""",
-            (user_id, name, body.get("phone"), body.get("email"), body.get("position"), body.get("department"),
-             body.get("avatar_initials") or initials_from_name(name), body.get("notes"))
-        )
-        new_id = cur.fetchone()[0]
-        conn.commit()
-        conn.close()
-        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True, "id": new_id})}
-
-    # POST /import — импорт CSV
-    if method == "POST" and path.endswith("/import"):
+    # ── POST /import — импорт CSV ──
+    if method == "POST" and path == "/import":
         body = json.loads(event.get("body") or "{}")
         csv_text = body.get("csv", "")
         reader = csv.DictReader(io.StringIO(csv_text))
@@ -221,8 +207,8 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True, "added": added})}
 
-    # GET /invites — список инвайтов
-    if method == "GET" and "/invite" in path:
+    # ── GET /invites — список инвайтов ──
+    if method == "GET" and path == "/invites":
         cur.execute(
             "SELECT id, code, label, used_count, max_uses, expires_at, created_at FROM invites WHERE created_by = %s ORDER BY created_at DESC",
             (user_id,)
@@ -239,8 +225,8 @@ def handler(event: dict, context) -> dict:
         ]
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"invites": invites})}
 
-    # POST /invites — создать инвайт
-    if method == "POST" and "/invite" in path:
+    # ── POST /invites — создать инвайт ──
+    if method == "POST" and path == "/invites":
         body = json.loads(event.get("body") or "{}")
         code = secrets.token_urlsafe(16)
         cur.execute(
@@ -252,8 +238,8 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True, "id": row[0], "code": row[1]})}
 
-    # GET /notifications — непрочитанные уведомления
-    if method == "GET" and "/notification" in path:
+    # ── GET /notifications ──
+    if method == "GET" and path == "/notifications":
         cur.execute(
             """SELECT id, type, title, body, data, created_at
                FROM notifications
@@ -273,8 +259,8 @@ def handler(event: dict, context) -> dict:
         ]
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"notifications": notifs, "unread": len(notifs)})}
 
-    # POST /notifications/read — пометить прочитанными
-    if method == "POST" and "/notification" in path:
+    # ── POST /notifications/read ──
+    if method == "POST" and path == "/notifications/read":
         body = json.loads(event.get("body") or "{}")
         ids = body.get("ids")
         if ids:
@@ -289,5 +275,24 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
 
+    # ── POST / — добавить контакт вручную ──
+    if method == "POST" and path == "/":
+        body = json.loads(event.get("body") or "{}")
+        name = (body.get("display_name") or "").strip()
+        if not name:
+            conn.close()
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "Укажите имя"})}
+        cur.execute(
+            """INSERT INTO external_contacts (owner_id, display_name, phone, email, position, department, avatar_initials, notes, source)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'manual')
+               RETURNING id""",
+            (user_id, name, body.get("phone"), body.get("email"), body.get("position"), body.get("department"),
+             body.get("avatar_initials") or initials_from_name(name), body.get("notes"))
+        )
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        conn.close()
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True, "id": new_id})}
+
     conn.close()
-    return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Not found"})}
+    return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Not found", "path": path, "method": method})}
