@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { FONT, btn3d, card3d, heading3d, input3d } from "@/styles/theme3d";
 import Icon from "@/components/ui/icon";
 
@@ -40,11 +40,11 @@ export default function InviteModal({ onClose, apiUrl, sessionId }: Props) {
       const data = await res.json();
       setInvites(data.invites || []);
       if (!selectedInvite && data.invites?.length) setSelectedInvite(data.invites[0]);
-    } catch {}
+    } catch (e) { console.error(e); }
     setLoading(false);
   };
 
-  useEffect(() => { loadInvites(); }, []);
+  useEffect(() => { loadInvites(); }, [apiUrl, sessionId]);
 
   const createInvite = async () => {
     setCreating(true);
@@ -59,7 +59,7 @@ export default function InviteModal({ onClose, apiUrl, sessionId }: Props) {
         await loadInvites();
         setLabel("");
       }
-    } catch {}
+    } catch (e) { console.error(e); }
     setCreating(false);
   };
 

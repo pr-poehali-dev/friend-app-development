@@ -1873,9 +1873,10 @@ function AppInner() {
 
         {/* CONTACTS */}
         {section === "contacts" && (() => {
-          const allContacts = [
-            ...contacts.map(c => ({ ...c, source: "internal" as const })),
-            ...externalContacts.filter(ec => !contacts.some(c => c.id === ec.linked_user_id)).map(ec => ({ ...ec, username: "", source: ec.source as string })),
+          type AnyContact = { id: number; username: string; display_name: string; position?: string; department?: string; phone?: string; avatar_initials: string; online: boolean; source: string; linked_user_id?: number };
+          const allContacts: AnyContact[] = [
+            ...contacts.map(c => ({ ...c, source: "internal", linked_user_id: undefined })),
+            ...externalContacts.filter(ec => !contacts.some(c => c.id === ec.linked_user_id)).map(ec => ({ ...ec, username: "" })),
           ];
           const filtered = allContacts.filter(c =>
             c.display_name.toLowerCase().includes(contactSearch.toLowerCase()) ||
@@ -1968,17 +1969,17 @@ function AppInner() {
                           )}
                         </div>
                         {c.position && <div className="text-[11px] mb-1" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{c.position}</div>}
-                        {(c as {phone?: string}).phone && <div className="text-[11px] mb-1" style={{ fontFamily: FONT.mono, color: "var(--t-text-dim)" }}>{(c as {phone?: string}).phone}</div>}
+                        {c.phone && <div className="text-[11px] mb-1" style={{ fontFamily: FONT.mono, color: "var(--t-text-dim)" }}>{c.phone}</div>}
                         <div className="flex gap-1.5 mt-3">
-                          {c.source === "internal" || (c as {linked_user_id?: number}).linked_user_id ? (
+                          {c.source === "internal" || c.linked_user_id ? (
                             <>
-                              <button onClick={() => openChatWith((c as {linked_user_id?: number}).linked_user_id || (c as {id: number}).id)} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
+                              <button onClick={() => openChatWith(c.linked_user_id || c.id)} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
                                 <Icon name="MessageSquare" size={11} style={liveIcon(index * 0.3)} /> ЧАТ
                               </button>
-                              <button onClick={() => startCall(c as Contact, "audio")} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
+                              <button onClick={() => startCall(c as unknown as Contact, "audio")} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
                                 <Icon name="Phone" size={11} style={liveIcon(index * 0.3 + 0.1)} /> ЗВОНОК
                               </button>
-                              <button onClick={() => startCall(c as Contact, "video")} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
+                              <button onClick={() => startCall(c as unknown as Contact, "video")} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
                                 <Icon name="Video" size={11} style={liveIcon(index * 0.3 + 0.2)} /> ВИДЕО
                               </button>
                             </>
