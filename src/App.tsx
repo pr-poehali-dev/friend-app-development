@@ -4,6 +4,7 @@ import { FONT, card3d, btn3d, heading3d, liveIcon, msgOwn, msgOther } from "@/st
 import AddContactModal from "@/components/contacts/AddContactModal";
 import InviteModal from "@/components/contacts/InviteModal";
 import JoinPage from "@/components/contacts/JoinPage";
+import NotificationToast, { type AppNotification } from "@/components/ui/NotificationToast";
 
 // ===== THEME =====
 export type ThemeId = "dark-blue" | "whatsapp" | "telegram" | "light" | "purple" | "slate" | "teal";
@@ -1236,6 +1237,7 @@ function AppInner() {
   const [showAddContact, setShowAddContact] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [externalContacts, setExternalContacts] = useState<{id:number;display_name:string;phone?:string;email?:string;position?:string;department?:string;avatar_initials:string;online:boolean;source:string;linked_user_id?:number}[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const inviteCode = new URLSearchParams(window.location.search).get("invite");
 
   // Check existing session
@@ -1293,6 +1295,34 @@ function AppInner() {
       if (data.contacts) setExternalContacts(data.contacts);
     } catch (e) { console.error(e); }
   }, [sessionToken]);
+
+  // Fetch notifications
+  const fetchNotifications = useCallback(async () => {
+    if (!sessionToken) return;
+    try {
+      const res = await fetch(`${API.contacts}/notifications`, { headers: { "X-Session-Id": sessionToken } });
+      const data = await res.json();
+      if (data.notifications?.length) setNotifications(data.notifications);
+    } catch { /* silent */ }
+  }, [sessionToken]);
+
+  const dismissNotifications = useCallback(async (ids: number[]) => {
+    if (!sessionToken) return;
+    setNotifications(prev => prev.filter(n => !ids.includes(n.id)));
+    fetch(`${API.contacts}/notifications/read`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Session-Id": sessionToken },
+      body: JSON.stringify({ ids }),
+    }).catch(() => {});
+  }, [sessionToken]);
+
+  // Poll notifications every 15s
+  useEffect(() => {
+    if (!sessionToken) return;
+    fetchNotifications();
+    const iv = setInterval(fetchNotifications, 15000);
+    return () => clearInterval(iv);
+  }, [sessionToken, fetchNotifications]);
 
   // Load messages
   const loadMessages = useCallback(async (chatId: number) => {
@@ -1611,6 +1641,7 @@ function AppInner() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden transition-colors duration-300 relative" style={{ fontFamily: FONT.body, background: T.bgDeep, color: T.text }}>
+      <NotificationToast notifications={notifications} onDismiss={dismissNotifications} />
 
       {/* ── Звёзды фона (только для тёмных тем) ── */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden app-star" style={{ zIndex: 0 }}>

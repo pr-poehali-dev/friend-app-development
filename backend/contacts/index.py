@@ -7,6 +7,8 @@ GET /invites       — список инвайт-ссылок пользоват
 POST /invites      — создать инвайт-ссылку
 GET /invite/{code} — публичная инфо по инвайту (без авторизации)
 POST /join         — принять инвайт (зарегистрированный пользователь вступает в список)
+GET /notifications — непрочитанные уведомления текущего пользователя
+POST /notifications/read — пометить уведомления прочитанными
 """
 import json
 import os
@@ -128,6 +130,17 @@ def handler(event: dict, context) -> dict:
                 (user["id"], created_by)
             )
         cur.execute("UPDATE invites SET used_count = used_count + 1 WHERE id = %s", (invite_id,))
+        # Уведомление владельцу ссылки
+        cur.execute(
+            """INSERT INTO notifications (user_id, type, title, body, data)
+               VALUES (%s, 'invite_join', %s, %s, %s)""",
+            (
+                created_by,
+                "Новый контакт по ссылке",
+                f"{user['display_name']} принял ваше приглашение и добавлен в контакты",
+                json.dumps({"user_id": user["id"], "display_name": user["display_name"], "avatar_initials": user["avatar_initials"]}),
+            )
+        )
         conn.commit()
         conn.close()
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True, "message": "Вы добавлены в список контактов"})}
@@ -238,6 +251,43 @@ def handler(event: dict, context) -> dict:
         conn.commit()
         conn.close()
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True, "id": row[0], "code": row[1]})}
+
+    # GET /notifications — непрочитанные уведомления
+    if method == "GET" and "/notification" in path:
+        cur.execute(
+            """SELECT id, type, title, body, data, created_at
+               FROM notifications
+               WHERE user_id = %s AND read_at IS NULL
+               ORDER BY created_at DESC
+               LIMIT 50""",
+            (user_id,)
+        )
+        rows = cur.fetchall()
+        conn.close()
+        notifs = [
+            {
+                "id": r[0], "type": r[1], "title": r[2], "body": r[3],
+                "data": r[4], "created_at": r[5].isoformat() if r[5] else None,
+            }
+            for r in rows
+        ]
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"notifications": notifs, "unread": len(notifs)})}
+
+    # POST /notifications/read — пометить прочитанными
+    if method == "POST" and "/notification" in path:
+        body = json.loads(event.get("body") or "{}")
+        ids = body.get("ids")
+        if ids:
+            placeholders = ",".join(["%s"] * len(ids))
+            cur.execute(
+                f"UPDATE notifications SET read_at = NOW() WHERE id IN ({placeholders}) AND user_id = %s",
+                (*ids, user_id)
+            )
+        else:
+            cur.execute("UPDATE notifications SET read_at = NOW() WHERE user_id = %s AND read_at IS NULL", (user_id,))
+        conn.commit()
+        conn.close()
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
 
     conn.close()
     return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Not found"})}
