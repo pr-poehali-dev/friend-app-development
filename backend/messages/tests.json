@@ -25,7 +25,7 @@
     {
       "name": "Post react — unauthorized",
       "method": "POST",
-      "path": "/react",
+      "path": "/?action=react",
       "body": {"message_id": 1, "emoji": "👍"},
       "expectedStatus": 401,
       "bodyMatcher": "partial"

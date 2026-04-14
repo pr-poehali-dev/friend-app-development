@@ -247,6 +247,34 @@ def handler(event: dict, context) -> dict:
                 }
                 return {"statusCode": 200, "headers": CORS, "body": json.dumps({"message": message})}
 
+            # ── POST ?action=send — переслать файл по URL ────────────────────
+            qs = event.get("queryStringParameters") or {}
+            if qs.get("action") == "send":
+                body = json.loads(event.get("body") or "{}")
+                chat_id = body.get("chat_id")
+                file_name = body.get("file_name", "file")
+                file_url = body.get("file_url", "")
+                msg_type = body.get("msg_type", "file")
+                if not chat_id or not file_url:
+                    return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "chat_id and file_url required"})}
+                cur.execute(f"SELECT 1 FROM {t('chat_members')} WHERE chat_id=%s AND user_id=%s", (chat_id, user_id))
+                if not cur.fetchone():
+                    return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "forbidden"})}
+                cur.execute(
+                    f"""INSERT INTO {t('messages')} (chat_id, sender_id, text, msg_type, file_name, file_url)
+                       VALUES (%s,%s,'',  %s,       %s,        %s) RETURNING id, created_at""",
+                    (chat_id, user_id, msg_type, file_name, file_url)
+                )
+                row = cur.fetchone()
+                conn.commit()
+                return {"statusCode": 200, "headers": CORS, "body": json.dumps({"message": {
+                    "id": row[0], "text": "", "type": "file",
+                    "file_name": file_name, "file_size": "", "file_url": file_url,
+                    "time": row[1].strftime("%H:%M"), "sender_id": user_id,
+                    "sender_name": user_name, "sender_avatar": user_avatar,
+                    "own": True, "reactions": [],
+                }})}
+
             # ── POST / — текстовое сообщение ──────────────────────────────────
             body = json.loads(event.get("body") or "{}")
             chat_id = body.get("chat_id")

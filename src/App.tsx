@@ -1346,6 +1346,9 @@ function AppInner() {
   const [loadingUserFiles, setLoadingUserFiles] = useState(false);
   const [uploadingUserFile, setUploadingUserFile] = useState(false);
   const [sendFileModal, setSendFileModal] = useState<{id:number;name:string;url:string} | null>(null);
+  const [forwardFileModal, setForwardFileModal] = useState<{name:string;url:string} | null>(null);
+  const [forwardChatIds, setForwardChatIds] = useState<number[]>([]);
+  const [forwardingFile, setForwardingFile] = useState(false);
   const [sendChatIds, setSendChatIds] = useState<number[]>([]);
   const [sendEmails, setSendEmails] = useState("");
   const [sendMessage, setSendMessage] = useState("");
@@ -1687,6 +1690,32 @@ function AppInner() {
       setLoadingCalls(false);
     }
   }, [sessionToken]);
+
+  const handleForwardFile = async () => {
+    if (!forwardFileModal || forwardChatIds.length === 0) return;
+    setForwardingFile(true);
+    try {
+      await Promise.all(forwardChatIds.map(chatId =>
+        fetch(`${API.messages}?action=send`, {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: "",
+            msg_type: "file",
+            file_name: forwardFileModal.name,
+            file_url: forwardFileModal.url,
+          }),
+        })
+      ));
+      setForwardFileModal(null);
+      setForwardChatIds([]);
+      showToast("Файл переслан", `В ${forwardChatIds.length} чат(а)`, "info");
+      loadChats();
+    } finally {
+      setForwardingFile(false);
+    }
+  };
 
   useEffect(() => {
     if (section === "calls" && sessionToken) loadCallHistory();
@@ -2525,34 +2554,63 @@ function AppInner() {
                                 const isImage = /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(name);
                                 const isVideo = /\.(mp4|webm|mov|avi|mkv)$/i.test(name);
                                 const isAudio = /\.(mp3|ogg|wav|m4a|aac)$/i.test(name);
+                                const FileActions = () => (
+                                  <div className="flex items-center gap-1 mt-2">
+                                    <a
+                                      href={url} download={name}
+                                      title="Скачать"
+                                      onClick={e => e.stopPropagation()}
+                                      style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 6, background: "color-mix(in srgb, var(--t-accent) 15%, transparent)", border: "1px solid color-mix(in srgb, var(--t-accent) 30%, transparent)", color: "var(--t-accent)", fontFamily: FONT.mono, fontSize: 10, textDecoration: "none", cursor: "pointer" }}
+                                    >
+                                      <Icon name="Download" size={11} /> скачать
+                                    </a>
+                                    <button
+                                      title="Переслать"
+                                      onClick={() => { setForwardFileModal({ name, url }); setForwardChatIds([]); }}
+                                      style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 6, background: "color-mix(in srgb, var(--t-accent) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--t-accent) 20%, transparent)", color: "var(--t-text-dim)", fontFamily: FONT.mono, fontSize: 10, cursor: "pointer" }}
+                                    >
+                                      <Icon name="Forward" size={11} /> переслать
+                                    </button>
+                                  </div>
+                                );
                                 if (isImage) return (
-                                  <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
-                                    <img src={url} alt={name} style={{ maxWidth: 260, maxHeight: 200, borderRadius: 8, display: "block", objectFit: "cover" }} loading="lazy" />
+                                  <div>
+                                    <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}
+                                      draggable onDragStart={e => { e.dataTransfer.setData("text/uri-list", url); e.dataTransfer.setData("text/plain", url); }}>
+                                      <img src={url} alt={name} style={{ maxWidth: 260, maxHeight: 200, borderRadius: 8, display: "block", objectFit: "cover" }} loading="lazy" />
+                                    </a>
                                     <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)", marginTop: 4 }}>{msg.file_size}</div>
-                                  </a>
+                                    <FileActions />
+                                  </div>
                                 );
                                 if (isVideo) return (
                                   <div>
                                     <video src={url} controls style={{ maxWidth: 260, maxHeight: 180, borderRadius: 8, display: "block" }} />
                                     <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)", marginTop: 4 }}>{name} · {msg.file_size}</div>
+                                    <FileActions />
                                   </div>
                                 );
                                 if (isAudio) return (
                                   <div>
                                     <audio src={url} controls style={{ width: 220, marginBottom: 4 }} />
                                     <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)" }}>{name} · {msg.file_size}</div>
+                                    <FileActions />
                                   </div>
                                 );
                                 return (
-                                  <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-                                    <div style={{ width: 36, height: 36, borderRadius: 8, background: `color-mix(in srgb, var(--t-accent) 15%, transparent)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                      <Icon name={/\.(zip|rar|7z|tar|gz)$/i.test(name) ? "Archive" : /\.(pdf)$/i.test(name) ? "FileText" : "File"} size={18} style={liveIcon()} />
+                                  <div>
+                                    <div className="flex items-center gap-3"
+                                      draggable onDragStart={e => { e.dataTransfer.setData("text/uri-list", url); e.dataTransfer.setData("text/plain", url); }}>
+                                      <div style={{ width: 36, height: 36, borderRadius: 8, background: `color-mix(in srgb, var(--t-accent) 15%, transparent)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                        <Icon name={/\.(zip|rar|7z|tar|gz)$/i.test(name) ? "Archive" : /\.(pdf)$/i.test(name) ? "FileText" : "File"} size={18} style={liveIcon()} />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <div className="msg-text font-medium truncate max-w-[180px]" style={{ color: "var(--t-text)" }}>{name}</div>
+                                        <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)" }}>{msg.file_size}</div>
+                                      </div>
                                     </div>
-                                    <div className="min-w-0">
-                                      <div className="msg-text font-medium truncate max-w-[180px]" style={{ color: "var(--t-text)" }}>{name}</div>
-                                      <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)" }}>{msg.file_size}</div>
-                                    </div>
-                                  </a>
+                                    <FileActions />
+                                  </div>
                                 );
                               })() : (
                                 <span className="msg-text">{msg.text}</span>
@@ -3982,6 +4040,53 @@ function AppInner() {
           onToggleMic={toggleMic}
           onToggleCam={toggleCam}
         />
+      )}
+
+      {/* Forward File Modal */}
+      {forwardFileModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }}>
+          <div className="w-full max-w-sm mx-4 rounded-xl overflow-hidden" style={{ background: "var(--t-bg-panel)", border: "1px solid var(--t-border)", boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}>
+            <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "var(--t-border)" }}>
+              <span style={{ fontFamily: FONT.heading, fontWeight: 700, fontSize: 13, color: "var(--t-text)", letterSpacing: "0.08em" }}>ПЕРЕСЛАТЬ ФАЙЛ</span>
+              <button onClick={() => setForwardFileModal(null)} style={{ color: "var(--t-text-dim)", background: "none", border: "none", cursor: "pointer" }}>
+                <Icon name="X" size={16} />
+              </button>
+            </div>
+            <div className="px-5 py-4 flex flex-col gap-4">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: "color-mix(in srgb, var(--t-accent) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--t-accent) 20%, transparent)" }}>
+                <Icon name="Paperclip" size={14} style={{ color: "var(--t-accent)", flexShrink: 0 }} />
+                <span style={{ fontFamily: FONT.body, fontSize: 12, color: "var(--t-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{forwardFileModal.name}</span>
+              </div>
+              <div>
+                <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)", letterSpacing: "0.1em", marginBottom: 8 }}>ВЫБЕРИТЕ ЧАТЫ</div>
+                <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+                  {chats.map(ch => (
+                    <label key={ch.id} className="flex items-center gap-2 cursor-pointer py-1.5 px-2 rounded hover:bg-white/5">
+                      <input type="checkbox" checked={forwardChatIds.includes(ch.id)}
+                        onChange={e => setForwardChatIds(prev => e.target.checked ? [...prev, ch.id] : prev.filter(x => x !== ch.id))}
+                        className="accent-[var(--t-accent)]" />
+                      <span style={{ fontFamily: FONT.body, fontSize: 12, color: "var(--t-text)" }}>{ch.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t flex gap-2 justify-end" style={{ borderColor: "var(--t-border)" }}>
+              <button onClick={() => setForwardFileModal(null)}
+                className="px-4 py-2 text-xs rounded"
+                style={{ fontFamily: FONT.mono, color: "var(--t-text-dim)", border: "1px solid var(--t-border)", background: "none", cursor: "pointer" }}>
+                ОТМЕНА
+              </button>
+              <button onClick={handleForwardFile}
+                disabled={forwardChatIds.length === 0 || forwardingFile}
+                className="px-4 py-2 text-xs rounded flex items-center gap-1.5 disabled:opacity-50"
+                style={{ ...btn3d("var(--t-accent)") }}>
+                {forwardingFile ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Icon name="Forward" size={12} />}
+                ПЕРЕСЛАТЬ {forwardChatIds.length > 0 ? `(${forwardChatIds.length})` : ""}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Camera Modal */}
