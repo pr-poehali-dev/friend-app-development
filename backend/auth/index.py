@@ -142,21 +142,29 @@ def handler(event: dict, context) -> dict:
                         f"UPDATE {t('invites')} SET used_count = used_count + 1 WHERE code = %s",
                         (invite_code,)
                     )
-                    # Взаимно добавить в контакты
-                    for owner, linked in [(invite_creator_id, new_user_id), (new_user_id, invite_creator_id)]:
-                        cur.execute(
-                            f"""SELECT id FROM {t('external_contacts')}
-                               WHERE owner_id = %s AND linked_user_id = %s""",
-                            (owner, linked)
-                        )
-                        if not cur.fetchone():
-                            cur.execute(
-                                f"""INSERT INTO {t('external_contacts')}
-                                       (owner_id, display_name, avatar_initials, source, linked_user_id)
-                                    SELECT %s, display_name, avatar_initials, 'invite', id
-                                    FROM {t('users')} WHERE id = %s""",
-                                (owner, linked)
-                            )
+
+                # Добавить нового пользователя в контакты ВСЕМ существующим и наоборот
+                cur.execute(f"SELECT id FROM {t('users')} WHERE id != %s", (new_user_id,))
+                existing_ids = [r[0] for r in cur.fetchall()]
+                for existing_id in existing_ids:
+                    # новый видит существующего
+                    cur.execute(
+                        f"""INSERT INTO {t('external_contacts')}
+                               (owner_id, display_name, avatar_initials, source, linked_user_id)
+                            SELECT %s, display_name, avatar_initials, 'system', id
+                            FROM {t('users')} WHERE id = %s
+                            ON CONFLICT DO NOTHING""",
+                        (new_user_id, existing_id)
+                    )
+                    # существующий видит нового
+                    cur.execute(
+                        f"""INSERT INTO {t('external_contacts')}
+                               (owner_id, display_name, avatar_initials, source, linked_user_id)
+                            SELECT %s, display_name, avatar_initials, 'system', id
+                            FROM {t('users')} WHERE id = %s
+                            ON CONFLICT DO NOTHING""",
+                        (existing_id, new_user_id)
+                    )
 
                 # Создать сессию
                 token = create_session(cur, new_user_id)
