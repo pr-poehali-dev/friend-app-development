@@ -1198,14 +1198,27 @@ function SettingsPanel({
   );
 }
 
+// ============ MOBILE HOOK ============
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, []);
+  return isMobile;
+}
+
 // ============ MAIN APP ============
 function AppInner() {
   useTheme(); // подписка на тему (применяется через CSS body[data-theme])
+  const isMobile = useIsMobile();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
 
   const [section, setSection] = useState<Section>("chats");
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false); // true = открыт чат/карточка, false = список
   const [chats, setChats] = useState<Chat[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
@@ -1666,12 +1679,14 @@ function AppInner() {
         ))}
       </div>
 
-      {/* ── 3D SIDEBAR ── */}
-      <nav className="flex flex-col items-center py-3 w-[62px] gap-0.5 flex-shrink-0 relative z-10" style={{
-        background: `linear-gradient(180deg, var(--t-bg-deep) 0%, color-mix(in srgb, var(--t-bg-deep) 92%, var(--t-accent)) 100%)`,
-        borderRight: "1px solid var(--t-border)",
-        boxShadow: "2px 0 16px rgba(0,0,0,0.25), inset -1px 0 0 rgba(255,255,255,0.04)",
-      }}>
+      {/* ── 3D SIDEBAR (только десктоп) ── */}
+      <nav className="flex-col items-center py-3 w-[62px] gap-0.5 flex-shrink-0 relative z-10"
+        style={{
+          display: isMobile ? "none" : "flex",
+          background: `linear-gradient(180deg, var(--t-bg-deep) 0%, color-mix(in srgb, var(--t-bg-deep) 92%, var(--t-accent)) 100%)`,
+          borderRight: "1px solid var(--t-border)",
+          boxShadow: "2px 0 16px rgba(0,0,0,0.25), inset -1px 0 0 rgba(255,255,255,0.04)",
+        }}>
         {/* Лого */}
         <div className="mb-3" style={{ padding: "4px 0" }}>
           <div className="nav-logo" style={{
@@ -1739,14 +1754,65 @@ function AppInner() {
         </div>
       </nav>
 
+      {/* ── BOTTOM NAV (только мобильный) ── */}
+      {isMobile && (
+        <nav style={{
+          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 50,
+          background: `linear-gradient(180deg, color-mix(in srgb, var(--t-bg-deep) 95%, var(--t-accent)), var(--t-bg-deep))`,
+          borderTop: "1px solid var(--t-border)",
+          boxShadow: "0 -4px 20px rgba(0,0,0,0.3)",
+          display: "flex", alignItems: "center", justifyContent: "space-around",
+          padding: `6px 4px calc(10px + env(safe-area-inset-bottom, 0px))`,
+        }}>
+          {[...navItems, ...bottomNav].slice(0, 5).map((item, idx) => {
+            const active = section === item.id;
+            return (
+              <button key={item.id} onClick={() => { setSection(item.id); setMobilePanelOpen(false); }}
+                style={{
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                  padding: "6px 10px", borderRadius: 12, flex: 1,
+                  background: active ? `color-mix(in srgb, var(--t-accent) 15%, transparent)` : "transparent",
+                  border: active ? `1px solid color-mix(in srgb, var(--t-accent) 30%, transparent)` : "1px solid transparent",
+                  color: active ? "var(--t-accent)" : "var(--t-text-dim)",
+                  animation: active ? `iconLive ${3 + idx * 0.5}s ease-in-out infinite` : "none",
+                }}>
+                <Icon name={item.icon} size={19} />
+                <span style={{ fontSize: 8, fontFamily: FONT.heading, fontWeight: 600, letterSpacing: "0.05em" }}>{item.label}</span>
+              </button>
+            );
+          })}
+          {/* Аватар/настройки */}
+          <button onClick={() => { setSection("settings"); setMobilePanelOpen(false); }}
+            style={{
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+              padding: "6px 10px", borderRadius: 12, flex: 1,
+              background: section === "settings" ? `color-mix(in srgb, var(--t-accent) 15%, transparent)` : "transparent",
+              border: section === "settings" ? `1px solid color-mix(in srgb, var(--t-accent) 30%, transparent)` : "1px solid transparent",
+            }}>
+            <div style={{
+              width: 22, height: 22, borderRadius: 6,
+              background: "var(--t-accent)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontFamily: FONT.heading, fontWeight: 700, fontSize: 9, color: "#fff",
+            }}>{currentUser.avatar_initials}</div>
+            <span style={{ fontSize: 8, fontFamily: FONT.heading, fontWeight: 600, letterSpacing: "0.05em", color: section === "settings" ? "var(--t-accent)" : "var(--t-text-dim)" }}>Я</span>
+          </button>
+        </nav>
+      )}
+
       {/* Content */}
-      <div className="flex flex-1 overflow-hidden relative z-10">
+      <div className="flex flex-1 overflow-hidden relative z-10" style={{ paddingBottom: isMobile ? 64 : 0 }}>
 
         {/* CHATS */}
         {section === "chats" && (
           <>
             {/* ── Левая панель: список чатов ── */}
-            <div className="w-72 flex flex-col flex-shrink-0" style={{ background: "var(--t-bg-main)", borderRight: "1px solid var(--t-border)", boxShadow: "2px 0 12px rgba(0,0,0,0.3)" }}>
+            <div style={{
+              width: isMobile ? "100%" : 288, flexShrink: 0,
+              display: isMobile && mobilePanelOpen ? "none" : "flex",
+              flexDirection: "column",
+              background: "var(--t-bg-main)", borderRight: "1px solid var(--t-border)", boxShadow: "2px 0 12px rgba(0,0,0,0.3)"
+            }}>
               <div className="px-4 pt-4 pb-3" style={{ borderBottom: "1px solid var(--t-border)", background: `linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))` }}>
                 <div className="flex items-center justify-between mb-3">
                   <h2 style={{ ...heading3d(12), letterSpacing: "0.12em" }}>ЧАТЫ</h2>
@@ -1761,7 +1827,7 @@ function AppInner() {
               </div>
               <div className="flex-1 overflow-y-auto">
                 {filteredChats.map(chat => (
-                  <button key={chat.id} onClick={() => setActiveChat(chat)}
+                  <button key={chat.id} onClick={() => { setActiveChat(chat); if (isMobile) setMobilePanelOpen(true); }}
                     className="w-full flex items-center gap-3 px-4 py-3 text-left transition-all duration-200"
                     style={{
                       borderBottom: "1px solid var(--t-bg-panel)",
@@ -1792,16 +1858,21 @@ function AppInner() {
             </div>
 
             {/* ── Правая часть: переписка ── */}
-            <div className="flex flex-col flex-1 overflow-hidden">
+            <div className="flex flex-col flex-1 overflow-hidden" style={{ display: isMobile && !mobilePanelOpen ? "none" : "flex" }}>
               {activeChat ? (
                 <>
                   {/* Заголовок чата */}
-                  <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" style={{
+                  <div className="flex items-center justify-between px-3 py-3 flex-shrink-0" style={{
                     borderBottom: "1px solid var(--t-border)",
                     background: `linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 6%, var(--t-bg-main)), var(--t-bg-main))`,
                     boxShadow: "0 2px 12px rgba(0,0,0,0.3)",
                   }}>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      {isMobile && (
+                        <button onClick={() => setMobilePanelOpen(false)} style={{ color: "var(--t-accent)", padding: "4px 6px 4px 0" }}>
+                          <Icon name="ChevronLeft" size={20} />
+                        </button>
+                      )}
                       <AvatarBadge initials={activeChat.avatar} online={activeChat.type === "personal" ? activeChat.online : undefined} />
                       <div>
                         <div style={{ fontFamily: FONT.heading, fontWeight: 700, fontSize: 14, color: "var(--t-text)", letterSpacing: "0.05em", filter: "drop-shadow(0 1px 4px color-mix(in srgb, var(--t-accent) 30%, transparent))" }}>{activeChat.name}</div>
@@ -1943,7 +2014,14 @@ function AppInner() {
                 />
               )}
               <div className="flex flex-1 overflow-hidden">
-                <div className="w-72 flex flex-col border-r flex-shrink-0" style={{ borderColor: "var(--t-border)", background: "linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))", boxShadow: "2px 0 12px rgba(0,0,0,0.3)" }}>
+                <div style={{
+                  width: isMobile ? "100%" : 288, flexShrink: 0,
+                  display: isMobile && mobilePanelOpen ? "none" : "flex",
+                  flexDirection: "column",
+                  borderRight: "1px solid var(--t-border)",
+                  background: "linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))",
+                  boxShadow: "2px 0 12px rgba(0,0,0,0.3)",
+                }}>
                   <div className="px-4 pt-4 pb-3 border-b" style={{ borderColor: "var(--t-border)" }}>
                     <div className="flex items-center justify-between mb-3">
                       <h2 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>КОНТАКТЫ</h2>
@@ -1958,7 +2036,7 @@ function AppInner() {
                   </div>
                   <div className="flex-1 overflow-y-auto">
                     {filtered.map(c => (
-                      <div key={`${c.source}-${c.id}`} className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors" style={{ borderBottom: "1px solid var(--t-bg-panel)" }}>
+                      <div key={`${c.source}-${c.id}`} className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors" style={{ borderBottom: "1px solid var(--t-bg-panel)" }} onClick={() => isMobile && setMobilePanelOpen(true)}>
                         <AvatarBadge initials={c.avatar_initials} online={c.online} />
                         <div className="flex-1 min-w-0">
                           <div className="text-xs font-medium truncate" style={{ color: "var(--t-text)" }}>{c.display_name}</div>
@@ -1981,10 +2059,17 @@ function AppInner() {
                     )}
                   </div>
                 </div>
-                <div className="flex-1 overflow-y-auto px-8 py-6">
-                  <div className="flex items-center justify-between mb-5 max-w-2xl">
-                    <h3 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>ВСЕ КОНТАКТЫ ({filtered.length})</h3>
-                    <div className="flex gap-2 flex-wrap">
+                <div className="flex-1 overflow-y-auto px-4 py-4" style={{ display: isMobile && !mobilePanelOpen ? "none" : undefined }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      {isMobile && (
+                        <button onClick={() => setMobilePanelOpen(false)} style={{ color: "var(--t-accent)" }}>
+                          <Icon name="ChevronLeft" size={20} />
+                        </button>
+                      )}
+                      <h3 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>КОНТАКТЫ ({filtered.length})</h3>
+                    </div>
+                    <div className="flex gap-2">
                       <button onClick={() => setShowAddContact(true)} className="btn-3d px-3 py-1.5 text-[10px] flex items-center gap-1.5" style={{ ...btn3d("var(--t-accent)") }}>
                         <Icon name="UserPlus" size={11} /> ДОБАВИТЬ
                       </button>
@@ -1993,7 +2078,7 @@ function AppInner() {
                       </button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 max-w-2xl">
+                  <div className={`grid gap-3 ${isMobile ? "grid-cols-1" : "grid-cols-2"} max-w-2xl`}>
                     {filtered.map((c, index) => (
                       <div key={`${c.source}-${c.id}`} className="p-4 transition-all" style={{ ...card3d(), animation: "card3dFloat 4s ease-in-out infinite", animationDelay: `${index * 0.15}s` }}>
                         <div className="flex items-center gap-3 mb-3">
@@ -2064,7 +2149,12 @@ function AppInner() {
         {/* CALLS */}
         {section === "calls" && (
           <div className="flex flex-1 overflow-hidden">
-            <div className="w-80 flex flex-col border-r flex-shrink-0" style={{ borderColor: "var(--t-border)", background: "linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))", boxShadow: "2px 0 12px rgba(0,0,0,0.3)" }}>
+            <div style={{
+              width: isMobile ? "100%" : 320, flexShrink: 0, display: "flex", flexDirection: "column",
+              borderRight: "1px solid var(--t-border)",
+              background: "linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))",
+              boxShadow: "2px 0 12px rgba(0,0,0,0.3)"
+            }}>
               <div className="px-4 pt-4 pb-3 border-b flex items-center justify-between" style={{ borderColor: "var(--t-border)" }}>
                 <h2 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>ЗВОНКИ</h2>
                 {loadingCalls && <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--t-accent)", borderTopColor: "transparent" }} />}
@@ -2095,7 +2185,7 @@ function AppInner() {
                 )}
               </div>
             </div>
-            <div className="flex-1 flex flex-col items-center justify-center gap-6">
+            <div className="flex-1 flex flex-col items-center justify-center gap-6" style={{ display: isMobile ? "none" : "flex" }}>
               <div className="text-center">
                 <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4" style={{ ...card3d() }}>
                   <Icon name="Phone" size={32} style={liveIcon(0)} />
@@ -2128,7 +2218,12 @@ function AppInner() {
         {/* VIDEO */}
         {section === "video" && (
           <div className="flex flex-1 overflow-hidden">
-            <div className="w-72 flex flex-col border-r flex-shrink-0" style={{ borderColor: "var(--t-border)", background: "linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))", boxShadow: "2px 0 12px rgba(0,0,0,0.3)" }}>
+            <div style={{
+              width: isMobile ? "100%" : 288, flexShrink: 0, display: "flex", flexDirection: "column",
+              borderRight: "1px solid var(--t-border)",
+              background: "linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))",
+              boxShadow: "2px 0 12px rgba(0,0,0,0.3)"
+            }}>
               <div className="px-4 pt-4 pb-3 border-b" style={{ borderColor: "var(--t-border)" }}>
                 <h2 style={{ ...heading3d(13), letterSpacing: "0.12em", marginBottom: 8 }}>ВИДЕОЗВОНОК</h2>
                 <p className="text-[11px]" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>Выберите контакт</p>
@@ -2148,7 +2243,7 @@ function AppInner() {
                 ))}
               </div>
             </div>
-            <div className="flex-1 flex flex-col items-center justify-center">
+            <div className="flex-1 flex flex-col items-center justify-center" style={{ display: isMobile ? "none" : "flex" }}>
               {activeVideo && remoteStream ? (
                 <div className="relative w-full h-full bg-black">
                   <video autoPlay playsInline className="w-full h-full object-cover" ref={el => { if (el) el.srcObject = remoteStream; }} />
@@ -2232,7 +2327,7 @@ function AppInner() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-5">
-              <div className="grid grid-cols-3 gap-4">
+              <div className={`grid gap-4 ${isMobile ? "grid-cols-1" : "grid-cols-3"}`}>
                 {STATIC_BOTS.map((bot, index) => (
                   <div key={bot.id} className="p-4 transition-all" style={{ ...card3d(), animation: "card3dFloat 4s ease-in-out infinite", animationDelay: `${index * 0.2}s` }}>
                     <div className="flex items-start justify-between mb-3">
@@ -2279,7 +2374,7 @@ function AppInner() {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-5">
-              <div className="grid grid-cols-4 gap-3 mb-5">
+              <div className={`grid gap-3 mb-5 ${isMobile ? "grid-cols-2" : "grid-cols-4"}`}>
                 {[
                   { label: "Активных пользователей", value: String(contacts.filter(c => c.online).length + 1), icon: "Users", color: "var(--t-accent)" },
                   { label: "Сообщений в системе", value: String(messages.length), icon: "MessageSquare", color: "#22c55e" },

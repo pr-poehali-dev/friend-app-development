@@ -606,3 +606,25 @@ body[data-theme] label {
 .card-float {
   animation: card3dFloat 6s ease-in-out infinite;
 }
+
+/* ── Мобильная адаптация ── */
+* {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+body {
+  overscroll-behavior: none;
+}
+
+/* Safe area для нотча и home indicator */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .mobile-nav-safe {
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+}
+
+/* Плавная прокрутка списков на iOS */
+.overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+}
