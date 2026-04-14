@@ -1564,12 +1564,15 @@ function AppInner() {
 
     setUploadProgress(5);
 
-    // Читаем файл целиком как ArrayBuffer
-    const arrayBuffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
+    // Читаем файл через FileReader (совместимо со всеми браузерами)
+    const bytes = await new Promise<Uint8Array>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+      reader.onerror = () => reject(new Error("Не удалось прочитать файл"));
+      reader.readAsArrayBuffer(file);
+    });
     const totalChunks = Math.max(1, Math.ceil(bytes.length / CHUNK_SIZE));
 
-    // Быстрая конвертация Uint8Array → base64 без Array.from
     const toBase64 = (buf: Uint8Array): string => {
       let binary = "";
       const len = buf.byteLength;
@@ -1578,7 +1581,7 @@ function AppInner() {
     };
 
     // 1. init
-    console.log("[upload] init start, url:", `${API.fileUpload}/init`, "token:", sessionToken ? "ok" : "EMPTY");
+    console.log("[upload] init start, token:", sessionToken ? "ok" : "EMPTY");
     let initRes: Response;
     try {
       initRes = await fetch(`${API.fileUpload}/init`, {
@@ -1650,8 +1653,7 @@ function AppInner() {
     setUploadingFile(true);
     setUploadProgress(10);
     try {
-      let result: { message?: unknown; file?: unknown } | null = null;
-      result = await uploadFileChunked(file, `chat:${activeChat.id}`);
+      const result = await uploadFileChunked(file, `chat:${activeChat.id}`);
       setUploadProgress(100);
       if (result?.message) {
         setMessages(prev => [...prev, result!.message as never]);
