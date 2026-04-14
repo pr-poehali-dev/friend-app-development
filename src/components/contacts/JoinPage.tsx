@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { FONT, btn3d, card3d, heading3d } from "@/styles/theme3d";
 import Icon from "@/components/ui/icon";
+import { useLang } from "@/LangContext";
 
 interface Props {
   code: string;
@@ -18,6 +19,7 @@ interface InviteInfo {
 }
 
 export default function JoinPage({ code, apiUrl, sessionId, onJoined, onLogin }: Props) {
+  const { t } = useLang();
   const [info, setInfo] = useState<InviteInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
@@ -61,8 +63,8 @@ export default function JoinPage({ code, apiUrl, sessionId, onJoined, onLogin }:
             style={{ background: "var(--t-accent)", boxShadow: "0 0 20px color-mix(in srgb, var(--t-accent) 50%, transparent)" }}>
             <Icon name="UserPlus" size={28} style={{ color: "#fff" }} />
           </div>
-          <p className="text-[11px] mb-1" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)", letterSpacing: "0.08em" }}>ПРИГЛАШЕНИЕ</p>
-          <h1 style={{ ...heading3d(20), letterSpacing: "0.08em" }}>Присоединиться</h1>
+          <p className="text-[11px] mb-1" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)", letterSpacing: "0.08em" }}>{t("join_label")}</p>
+          <h1 style={{ ...heading3d(20), letterSpacing: "0.08em" }}>{t("join_title")}</h1>
         </div>
 
         <div className="p-6">
@@ -78,8 +80,8 @@ export default function JoinPage({ code, apiUrl, sessionId, onJoined, onLogin }:
           ) : done ? (
             <div className="text-center py-4">
               <Icon name="CheckCircle" size={40} className="mx-auto mb-3" style={{ color: "#22c55e" }} />
-              <p className="text-sm font-medium mb-1" style={{ fontFamily: FONT.heading, fontWeight: 700, color: "var(--t-text)" }}>Вы добавлены!</p>
-              <p className="text-xs" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>Переходим в приложение...</p>
+              <p className="text-sm font-medium mb-1" style={{ fontFamily: FONT.heading, fontWeight: 700, color: "var(--t-text)" }}>{t("join_success")}</p>
+              <p className="text-xs" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{t("join_redirect")}</p>
             </div>
           ) : info ? (
             <>
@@ -105,7 +107,7 @@ export default function JoinPage({ code, apiUrl, sessionId, onJoined, onLogin }:
               )}
 
               <p className="text-xs text-center mb-5" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>
-                Нажмите кнопку, чтобы добавиться в список контактов этого пользователя и получить возможность общаться, звонить и видеозванивать.
+                {t("join_desc")}
               </p>
 
               {error && <p className="text-[11px] text-center mb-3" style={{ color: "var(--t-danger)", fontFamily: FONT.body }}>{error}</p>}
@@ -114,11 +116,11 @@ export default function JoinPage({ code, apiUrl, sessionId, onJoined, onLogin }:
                 className="btn-3d w-full py-3 text-sm flex items-center justify-center gap-2"
                 style={{ ...btn3d("var(--t-accent)"), opacity: joining ? 0.7 : 1 }}>
                 {joining ? <Icon name="Loader" size={16} className="animate-spin" /> : <Icon name="UserPlus" size={16} />}
-                {sessionId ? "ПРИСОЕДИНИТЬСЯ" : "ВОЙТИ И ПРИСОЕДИНИТЬСЯ"}
+                {sessionId ? t("join_button") : t("join_login_button")}
               </button>
 
               <p className="text-[10px] text-center mt-3" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>
-                Уже перешли: {info.used_count}
+                {t("join_uses")} {info.used_count}
               </p>
             </>
           ) : null}

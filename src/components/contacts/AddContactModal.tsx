@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { FONT, btn3d, card3d, heading3d, input3d } from "@/styles/theme3d";
 import Icon from "@/components/ui/icon";
+import { useLang } from "@/LangContext";
 
 interface Props {
   onClose: () => void;
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export default function AddContactModal({ onClose, onAdded, apiUrl, sessionId }: Props) {
+  const { t } = useLang();
   const [tab, setTab] = useState<"manual" | "csv">("manual");
   const [form, setForm] = useState({ display_name: "", phone: "", email: "", position: "", department: "" });
   const [csvText, setCsvText] = useState("");
@@ -65,23 +67,23 @@ export default function AddContactModal({ onClose, onAdded, apiUrl, sessionId }:
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
       <div className="w-full max-w-md mx-4" style={{ ...card3d(), padding: 0, overflow: "hidden" }}>
         <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: "var(--t-border)" }}>
-          <span style={{ ...heading3d(14), letterSpacing: "0.1em" }}>ДОБАВИТЬ КОНТАКТ</span>
+          <span style={{ ...heading3d(14), letterSpacing: "0.1em" }}>{t("add_contact_title")}</span>
           <button onClick={onClose} style={{ color: "var(--t-text-dim)", cursor: "pointer" }}>
             <Icon name="X" size={18} />
           </button>
         </div>
 
         <div className="flex border-b" style={{ borderColor: "var(--t-border)" }}>
-          {(["manual", "csv"] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)}
+          {(["manual", "csv"] as const).map(tabId => (
+            <button key={tabId} onClick={() => setTab(tabId)}
               className="flex-1 py-2.5 text-xs font-medium transition-colors"
               style={{
                 fontFamily: FONT.heading, fontWeight: 700, letterSpacing: "0.08em",
-                color: tab === t ? "var(--t-accent)" : "var(--t-text-dim)",
-                borderBottom: tab === t ? "2px solid var(--t-accent)" : "2px solid transparent",
+                color: tab === tabId ? "var(--t-accent)" : "var(--t-text-dim)",
+                borderBottom: tab === tabId ? "2px solid var(--t-accent)" : "2px solid transparent",
                 background: "transparent",
               }}>
-              {t === "manual" ? "ВРУЧНУЮ" : "ЗАГРУЗИТЬ CSV"}
+              {tabId === "manual" ? t("add_manual_tab") : t("add_csv_tab")}
             </button>
           ))}
         </div>
@@ -90,11 +92,11 @@ export default function AddContactModal({ onClose, onAdded, apiUrl, sessionId }:
           {tab === "manual" ? (
             <div className="flex flex-col gap-3">
               {[
-                { key: "display_name", label: "Имя*", placeholder: "Иван Иванов" },
-                { key: "phone", label: "Телефон", placeholder: "+7 900 000 0000" },
+                { key: "display_name", label: t("add_name"), placeholder: "Иван Иванов" },
+                { key: "phone", label: t("add_phone"), placeholder: "+7 900 000 0000" },
                 { key: "email", label: "Email", placeholder: "ivan@example.com" },
-                { key: "position", label: "Должность", placeholder: "Менеджер" },
-                { key: "department", label: "Отдел", placeholder: "Продажи" },
+                { key: "position", label: t("add_position"), placeholder: "Менеджер" },
+                { key: "department", label: t("add_dept"), placeholder: "Продажи" },
               ].map(({ key, label, placeholder }) => (
                 <div key={key}>
                   <label className="block text-[10px] mb-1" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)", letterSpacing: "0.06em" }}>{label}</label>
@@ -119,10 +121,10 @@ export default function AddContactModal({ onClose, onAdded, apiUrl, sessionId }:
               >
                 <Icon name="Upload" size={24} className="mx-auto mb-2" style={{ color: "var(--t-text-dim)" }} />
                 <p className="text-xs" style={{ fontFamily: FONT.body, color: "var(--t-text-muted)" }}>
-                  Перетащите CSV или <span style={{ color: "var(--t-accent)" }}>выберите файл</span>
+                  {t("add_csv_drop")}
                 </p>
                 <p className="text-[10px] mt-1" style={{ color: "var(--t-text-dim)" }}>
-                  Колонки: name, phone, email, position, department
+                  {t("add_csv_cols")}
                 </p>
                 <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden"
                   onChange={e => { const f = e.target.files?.[0]; if (f) handleCsvFile(f); }} />
@@ -172,7 +174,7 @@ export default function AddContactModal({ onClose, onAdded, apiUrl, sessionId }:
           <div className="flex gap-2 mt-4">
             <button onClick={onClose} className="flex-1 py-2 text-xs rounded-sm"
               style={{ background: "var(--t-bg-active)", color: "var(--t-text-muted)", fontFamily: FONT.heading, fontWeight: 700, letterSpacing: "0.06em", border: "1px solid var(--t-border)", cursor: "pointer" }}>
-              ОТМЕНА
+              {t("add_cancel")}
             </button>
             <button
               onClick={tab === "manual" ? handleManualSubmit : handleCsvImport}
@@ -180,7 +182,10 @@ export default function AddContactModal({ onClose, onAdded, apiUrl, sessionId }:
               className="btn-3d flex-1 py-2 text-xs flex items-center justify-center gap-1.5"
               style={{ ...btn3d("var(--t-accent)"), opacity: loading ? 0.7 : 1 }}>
               {loading ? <Icon name="Loader" size={13} className="animate-spin" /> : <Icon name="UserPlus" size={13} />}
-              {tab === "manual" ? "ДОБАВИТЬ" : "ИМПОРТ"}
+              {loading
+                ? (tab === "manual" ? t("add_loading") : t("add_importing"))
+                : (tab === "manual" ? t("add_button") : t("add_import"))
+              }
             </button>
           </div>
         </div>

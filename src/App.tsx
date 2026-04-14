@@ -5,6 +5,8 @@ import AddContactModal from "@/components/contacts/AddContactModal";
 import InviteModal from "@/components/contacts/InviteModal";
 import JoinPage from "@/components/contacts/JoinPage";
 import NotificationToast, { type AppNotification } from "@/components/ui/NotificationToast";
+import { useLang } from "@/LangContext";
+import LanguageSwitcher from "@/components/ui/LanguageSwitcher";
 
 // ===== THEME =====
 export type ThemeId = "dark-blue" | "whatsapp" | "telegram" | "light" | "purple" | "slate" | "teal";
@@ -164,19 +166,7 @@ const STATIC_BOTS = [
   { id: 4, name: "Аналитика GPT", description: "ИИ-анализ данных и отчётов по запросу", category: "ИИ", active: true, avatar: "АИ", requests: 589 },
 ];
 
-const navItems = [
-  { id: "chats" as Section, icon: "MessageSquare", label: "Чаты" },
-  { id: "contacts" as Section, icon: "Users", label: "Контакты" },
-  { id: "calls" as Section, icon: "Phone", label: "Звонки" },
-  { id: "video" as Section, icon: "Video", label: "Видео" },
-  { id: "files" as Section, icon: "FolderOpen", label: "Файлы" },
-  { id: "bots" as Section, icon: "Bot", label: "Боты" },
-];
 
-const bottomNav = [
-  { id: "settings" as Section, icon: "Settings", label: "Настройки" },
-  { id: "analytics" as Section, icon: "BarChart2", label: "Аналитика" },
-];
 
 function AvatarBadge({ initials, size = "md", online }: { initials: string; size?: "sm" | "md" | "lg"; online?: boolean }) {
   const px = { sm: 32, md: 40, lg: 48 }[size];
@@ -295,6 +285,7 @@ function Spinner() {
 }
 
 function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void }) {
+  const { t } = useLang();
   const [step, setStep] = useState<AuthStep>("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -577,11 +568,11 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
             <div style={{ animation: "fadeSlideIn 0.4s cubic-bezier(0.22,1,0.36,1)" }}>
               <div style={FORM_CARD} className={FORM_CARD_CLS}>
                 <div style={{ position:"absolute", inset:0, borderRadius:20, background:"linear-gradient(135deg, rgba(255,120,30,0.08) 0%, transparent 50%)", pointerEvents:"none" }} />
-                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:22, fontWeight:900, letterSpacing:"0.04em", color:"#ff9000", textShadow:"0 0 20px rgba(255,140,0,0.4), 0 1px 0 rgba(120,60,0,0.5)", marginBottom:4, WebkitFontSmoothing:"antialiased" }}>ВХОД</h2>
-                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,180,80,0.75)", marginBottom:24, letterSpacing:"0.03em", WebkitFontSmoothing:"antialiased" }}>Введите никнейм и пароль</p>
+                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:22, fontWeight:900, letterSpacing:"0.04em", color:"#ff9000", textShadow:"0 0 20px rgba(255,140,0,0.4), 0 1px 0 rgba(120,60,0,0.5)", marginBottom:4, WebkitFontSmoothing:"antialiased" }}>{t("login_title")}</h2>
+                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,180,80,0.75)", marginBottom:24, letterSpacing:"0.03em", WebkitFontSmoothing:"antialiased" }}>{t("login_subtitle")}</p>
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div>
-                    <label className={label} style={LABEL_STYLE}>Никнейм</label>
+                    <label className={label} style={LABEL_STYLE}>{t("login_username")}</label>
                     <div className="relative">
                       <div className="absolute left-3 top-1/2 -translate-y-1/2" style={{ animation:"iconPulse 3s ease-in-out infinite" }}><Icon name="AtSign" size={15} style={ICON_STYLE} /></div>
                       <input type="text" value={username} onChange={e => { setUsername(e.target.value); clearErr(); }}
@@ -590,7 +581,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
                     </div>
                   </div>
                   <div>
-                    <label className={label} style={LABEL_STYLE}>Пароль</label>
+                    <label className={label} style={LABEL_STYLE}>{t("login_password")}</label>
                     <div className="relative">
                       <div className="absolute left-3 top-1/2 -translate-y-1/2" style={{ animation:"iconPulse 4s ease-in-out infinite" }}><Icon name="Lock" size={15} style={ICON_STYLE} /></div>
                       <input type={showPass ? "text" : "password"} value={password} onChange={e => { setPassword(e.target.value); clearErr(); }}
@@ -603,12 +594,12 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
                   </div>
                   {error && <div className={errBox} style={{ background:"rgba(255,50,0,0.15)", border:"1px solid rgba(255,80,0,0.3)" }}><Icon name="AlertCircle" size={12} />{error}</div>}
                   <button type="submit" disabled={loading || !username.trim() || !password.trim()} style={{ ...BTN_STYLE, backgroundSize:"200%", animation: loading ? "none" : "btnShimmer 3s linear infinite", opacity: (loading || !username.trim() || !password.trim()) ? 0.4 : 1 }}>
-                    {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Входим...</span> : "ВОЙТИ →"}
+                    {loading ? <span className="flex items-center justify-center gap-2"><Spinner />{t("login_loading")}</span> : t("login_button")}
                   </button>
                 </form>
                 <div className="mt-5 flex justify-between items-center">
-                  <button onClick={() => { setStep("forgot"); clearErr(); setEmail(""); }} style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,120,40,0.5)", background:"none", border:"none", cursor:"pointer" }}>Забыл пароль</button>
-                  <button onClick={() => { setStep("forgot"); clearErr(); setEmail(""); }} style={{ fontFamily:"'Rajdhani',sans-serif", fontWeight:600, fontSize:13, color:"rgba(255,180,60,0.9)", background:"none", border:"none", cursor:"pointer", letterSpacing:"0.05em" }}>РЕГИСТРАЦИЯ →</button>
+                  <button onClick={() => { setStep("forgot"); clearErr(); setEmail(""); }} style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,120,40,0.5)", background:"none", border:"none", cursor:"pointer" }}>{t("login_forgot")}</button>
+                  <button onClick={() => { setStep("forgot"); clearErr(); setEmail(""); }} style={{ fontFamily:"'Rajdhani',sans-serif", fontWeight:600, fontSize:13, color:"rgba(255,180,60,0.9)", background:"none", border:"none", cursor:"pointer", letterSpacing:"0.05em" }}>{t("login_register")}</button>
                 </div>
               </div>
             </div>
@@ -618,12 +609,12 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
           {step === "forgot" && (
             <div style={{ animation: "fadeSlideIn 0.4s cubic-bezier(0.22,1,0.36,1)" }}>
               <button onClick={() => { setStep("login"); clearErr(); }} className="flex items-center gap-1.5 mb-5 transition-colors" style={{ fontFamily:"'Rajdhani',sans-serif", fontSize:13, color:"rgba(255,120,40,0.6)", background:"none", border:"none", cursor:"pointer", letterSpacing:"0.05em" }}>
-                <Icon name="ArrowLeft" size={13} /> НАЗАД
+                <Icon name="ArrowLeft" size={13} /> {t("email_back")}
               </button>
               <div style={FORM_CARD} className={FORM_CARD_CLS}>
                 <div style={{ position:"absolute", inset:0, borderRadius:20, background:"linear-gradient(135deg, rgba(255,120,30,0.08) 0%, transparent 50%)", pointerEvents:"none" }} />
-                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:22, fontWeight:900, letterSpacing:"0.04em", color:"#ff9000", textShadow:"0 0 20px rgba(255,140,0,0.4), 0 1px 0 rgba(120,60,0,0.5)", marginBottom:4, WebkitFontSmoothing:"antialiased" }}>EMAIL</h2>
-                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,180,80,0.75)", marginBottom:24, WebkitFontSmoothing:"antialiased" }}>Введите email — пришлём код</p>
+                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:22, fontWeight:900, letterSpacing:"0.04em", color:"#ff9000", textShadow:"0 0 20px rgba(255,140,0,0.4), 0 1px 0 rgba(120,60,0,0.5)", marginBottom:4, WebkitFontSmoothing:"antialiased" }}>{t("email_title")}</h2>
+                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,180,80,0.75)", marginBottom:24, WebkitFontSmoothing:"antialiased" }}>{t("email_subtitle")}</p>
                 <form onSubmit={handleSendCode} className="space-y-4">
                   <div>
                     <label className={label} style={LABEL_STYLE}>Email</label>
@@ -636,7 +627,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
                   </div>
                   {error && <div className={errBox} style={{ background:"rgba(255,50,0,0.15)", border:"1px solid rgba(255,80,0,0.3)" }}><Icon name="AlertCircle" size={12} />{error}</div>}
                   <button type="submit" disabled={loading || !email.trim()} style={{ ...BTN_STYLE, backgroundSize:"200%", animation: loading ? "none" : "btnShimmer 3s linear infinite", opacity: (loading || !email.trim()) ? 0.4 : 1 }}>
-                    {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Отправляем...</span> : "ПОЛУЧИТЬ КОД →"}
+                    {loading ? <span className="flex items-center justify-center gap-2"><Spinner />{t("email_sending")}</span> : t("email_button")}
                   </button>
                 </form>
               </div>
@@ -647,12 +638,12 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
           {step === "email_code" && (
             <div style={{ animation: "fadeSlideIn 0.4s cubic-bezier(0.22,1,0.36,1)" }}>
               <button onClick={() => { setStep("forgot"); setCode(["","","","","",""]); clearErr(); }} className="flex items-center gap-1.5 mb-5" style={{ fontFamily:"'Rajdhani',sans-serif", fontSize:13, color:"rgba(255,120,40,0.6)", background:"none", border:"none", cursor:"pointer", letterSpacing:"0.05em" }}>
-                <Icon name="ArrowLeft" size={13} /> НАЗАД
+                <Icon name="ArrowLeft" size={13} /> {t("email_back")}
               </button>
               <div style={FORM_CARD} className={FORM_CARD_CLS}>
                 <div style={{ position:"absolute", inset:0, borderRadius:20, background:"linear-gradient(135deg, rgba(255,120,30,0.08) 0%, transparent 50%)", pointerEvents:"none" }} />
-                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:22, fontWeight:900, letterSpacing:"0.04em", color:"#ff9000", textShadow:"0 0 20px rgba(255,140,0,0.4), 0 1px 0 rgba(120,60,0,0.5)", marginBottom:4, WebkitFontSmoothing:"antialiased" }}>КОД</h2>
-                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,180,80,0.75)", marginBottom:24, WebkitFontSmoothing:"antialiased" }}>6-значный код на <span style={{ color:"#ffcc00", fontWeight:600 }}>{email}</span></p>
+                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:22, fontWeight:900, letterSpacing:"0.04em", color:"#ff9000", textShadow:"0 0 20px rgba(255,140,0,0.4), 0 1px 0 rgba(120,60,0,0.5)", marginBottom:4, WebkitFontSmoothing:"antialiased" }}>{t("code_title")}</h2>
+                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,180,80,0.75)", marginBottom:24, WebkitFontSmoothing:"antialiased" }}>{t("code_subtitle")} <span style={{ color:"#ffcc00", fontWeight:600 }}>{email}</span></p>
                 <div className="flex gap-2 mb-6">
                   {code.map((digit, idx) => (
                     <input key={idx} type="text" inputMode="numeric" maxLength={1} value={digit}
@@ -667,12 +658,12 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
                 </div>
                 {error && <div className={errBox + " mb-4"} style={{ background:"rgba(255,50,0,0.15)", border:"1px solid rgba(255,80,0,0.3)" }}><Icon name="AlertCircle" size={12} />{error}</div>}
                 <button onClick={() => handleVerifyCode()} disabled={!codeComplete || loading} style={{ ...BTN_STYLE, backgroundSize:"200%", animation: loading ? "none" : "btnShimmer 3s linear infinite", opacity: (!codeComplete || loading) ? 0.4 : 1, marginBottom:16 }}>
-                  {loading ? <span className="flex items-center justify-center gap-2"><Spinner />Проверяем...</span> : "ПРОДОЛЖИТЬ →"}
+                  {loading ? <span className="flex items-center justify-center gap-2"><Spinner />{t("code_checking")}</span> : t("code_button")}
                 </button>
                 <div className="text-center">
                   {resendTimer > 0
-                    ? <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,120,40,0.4)" }}>Повтор через <span style={{ color:"rgba(255,180,60,0.7)" }}>{resendTimer}с</span></span>
-                    : <button onClick={() => handleSendCode()} style={{ fontFamily:"'Rajdhani',sans-serif", fontSize:13, color:"rgba(255,180,60,0.8)", background:"none", border:"none", cursor:"pointer", letterSpacing:"0.05em" }}>ОТПРАВИТЬ СНОВА</button>
+                    ? <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,120,40,0.4)" }}>{t("code_resend_timer")} <span style={{ color:"rgba(255,180,60,0.7)" }}>{resendTimer}с</span></span>
+                    : <button onClick={() => handleSendCode()} style={{ fontFamily:"'Rajdhani',sans-serif", fontSize:13, color:"rgba(255,180,60,0.8)", background:"none", border:"none", cursor:"pointer", letterSpacing:"0.05em" }}>{t("code_resend")}</button>
                   }
                 </div>
               </div>
@@ -684,8 +675,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
             <div style={{ animation: "fadeSlideIn 0.4s cubic-bezier(0.22,1,0.36,1)" }}>
               <div style={FORM_CARD} className={FORM_CARD_CLS}>
                 <div style={{ position:"absolute", inset:0, borderRadius:20, background:"linear-gradient(135deg, rgba(255,120,30,0.08) 0%, transparent 50%)", pointerEvents:"none" }} />
-                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:20, fontWeight:900, letterSpacing:"0.04em", color:"#ff9000", textShadow:"0 0 20px rgba(255,140,0,0.4), 0 1px 0 rgba(120,60,0,0.5)", marginBottom:4, WebkitFontSmoothing:"antialiased" }}>РЕГИСТРАЦИЯ</h2>
-                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,180,80,0.75)", marginBottom:20, WebkitFontSmoothing:"antialiased" }}>Создайте аккаунт</p>
+                <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:20, fontWeight:900, letterSpacing:"0.04em", color:"#ff9000", textShadow:"0 0 20px rgba(255,140,0,0.4), 0 1px 0 rgba(120,60,0,0.5)", marginBottom:4, WebkitFontSmoothing:"antialiased" }}>{t("reg_title")}</h2>
+                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,180,80,0.75)", marginBottom:20, WebkitFontSmoothing:"antialiased" }}>{t("reg_subtitle")}</p>
                 <form onSubmit={handleRegister} className="space-y-3">
                   {[
                     { label:"Имя и фамилия", val:displayName, set:(v:string)=>{setDisplayName(v);clearErr();}, ph:"Иван Петров", icon:null, af:true },
@@ -725,7 +716,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
                   ))}
                   {error && <div className={errBox} style={{background:"rgba(255,50,0,0.15)",border:"1px solid rgba(255,80,0,0.3)"}}><Icon name="AlertCircle" size={12}/>{error}</div>}
                   <button type="submit" disabled={loading||!displayName.trim()||!newUsername.trim()||newPassword.length<6} style={{...BTN_STYLE,backgroundSize:"200%",animation:loading?"none":"btnShimmer 3s linear infinite",opacity:(loading||!displayName.trim()||!newUsername.trim()||newPassword.length<6)?0.4:1}}>
-                    {loading?<span className="flex items-center justify-center gap-2"><Spinner/>Создаём...</span>:"СОЗДАТЬ АККАУНТ →"}
+                    {loading?<span className="flex items-center justify-center gap-2"><Spinner/>{t("reg_loading")}</span>:t("reg_button")}
                   </button>
                 </form>
               </div>
@@ -815,6 +806,7 @@ function SettingsPanel({
   onUserUpdate: (u: User) => void;
   onLogout: () => void;
 }) {
+  const { t } = useLang();
   const [activeTab, setActiveTab] = useState<"profile" | "appearance">("profile");
   const [chatPattern, setChatPattern] = useState<string>(() => localStorage.getItem("chat_pattern") || "none");
   const { theme, setTheme } = useTheme();
@@ -902,8 +894,8 @@ function SettingsPanel({
   };
 
   const tabs = [
-    { id: "profile" as const, icon: "User", label: "Профиль" },
-    { id: "appearance" as const, icon: "Palette", label: "Оформление" },
+    { id: "profile" as const, icon: "User", label: t("settings_profile") },
+    { id: "appearance" as const, icon: "Palette", label: t("settings_appearance") },
   ];
 
   // Звёзды для настроек
@@ -937,7 +929,7 @@ function SettingsPanel({
         boxShadow: "2px 0 16px rgba(0,0,0,0.4)",
       }}>
         <div className="px-4 mb-4">
-          <h2 style={{ ...heading3d(11), letterSpacing: "0.18em" }}>НАСТРОЙКИ</h2>
+          <h2 style={{ ...heading3d(11), letterSpacing: "0.18em" }}>{t("settings_title")}</h2>
         </div>
         {tabs.map(item => {
           const active = activeTab === item.id;
@@ -956,11 +948,15 @@ function SettingsPanel({
             </button>
           );
         })}
-        <div className="mt-auto mb-4 px-4">
+        <div className="mt-auto mb-4 px-4 flex flex-col gap-2">
+          <div className="flex items-center justify-between px-1 mb-1">
+            <span style={{ fontFamily: FONT.heading, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", color: "var(--t-text-dim)", textTransform: "uppercase" }}>{t("settings_language")}</span>
+            <LanguageSwitcher compact />
+          </div>
           <button onClick={onLogout} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl transition-all btn-3d"
             style={{ ...btn3d("var(--t-danger)"), fontSize: 12, justifyContent: "center" }}>
             <Icon name="LogOut" size={13} style={{ color: "#fff" }} />
-            <span style={{ fontFamily: FONT.heading, fontWeight: 700, letterSpacing: "0.08em" }}>ВЫЙТИ</span>
+            <span style={{ fontFamily: FONT.heading, fontWeight: 700, letterSpacing: "0.08em" }}>{t("settings_logout")}</span>
           </button>
         </div>
       </div>
@@ -971,8 +967,8 @@ function SettingsPanel({
       {/* === ВКЛАДКА: ОФОРМЛЕНИЕ === */}
       {activeTab === "appearance" && (
         <div className="max-w-2xl">
-          <h3 style={{ ...heading3d(15), letterSpacing: "0.1em", marginBottom: 4 }}>ОФОРМЛЕНИЕ</h3>
-          <p style={{ fontFamily: FONT.body, fontSize: 12, color: "var(--t-text-dim)", marginBottom: 24 }}>Выберите цветовую тему интерфейса</p>
+          <h3 style={{ ...heading3d(15), letterSpacing: "0.1em", marginBottom: 4 }}>{t("settings_appearance")}</h3>
+          <p style={{ fontFamily: FONT.body, fontSize: 12, color: "var(--t-text-dim)", marginBottom: 24 }}>{t("settings_theme")}</p>
 
           <div className="grid grid-cols-2 gap-3 mb-8">
             {THEMES.map(t => {
@@ -1014,10 +1010,10 @@ function SettingsPanel({
           </div>
 
           {/* ── ОБОИ ЧАТА ── */}
-          <h3 className="text-xs font-semibold uppercase tracking-widest mb-3 mt-6" style={{ color: "var(--t-text-dim)" }}>Обои чата</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-widest mb-3 mt-6" style={{ color: "var(--t-text-dim)" }}>{t("settings_wallpaper")}</h3>
           <div className="grid grid-cols-4 gap-3 mb-6">
             {[
-              { id: "none",     label: "Без обоев",  bg: "var(--t-chat-bg)", pattern: "none",   preview: "solid" },
+              { id: "none",     label: t("settings_no_wallpaper"),  bg: "var(--t-chat-bg)", pattern: "none",   preview: "solid" },
               { id: "dots",     label: "Точки",      bg: "var(--t-chat-bg)", pattern: "dots",   preview: "dots" },
               { id: "lines",    label: "Линии",      bg: "var(--t-chat-bg)", pattern: "lines",  preview: "lines" },
               { id: "grid",     label: "Сетка",      bg: "var(--t-chat-bg)", pattern: "grid",   preview: "grid" },
@@ -1074,7 +1070,7 @@ function SettingsPanel({
 
       {/* === ВКЛАДКА: ПРОФИЛЬ === */}
       {activeTab === "profile" && <>
-        <h3 style={{ ...heading3d(15), letterSpacing: "0.1em", marginBottom: 20 }}>ПРОФИЛЬ</h3>
+        <h3 style={{ ...heading3d(15), letterSpacing: "0.1em", marginBottom: 20 }}>{t("settings_profile")}</h3>
 
         {/* Avatar preview */}
         <div className="flex items-center gap-5 mb-7 p-5 max-w-lg" style={{ ...card3d(), animation: "card3dFloat 7s ease-in-out infinite" }}>
@@ -1104,7 +1100,7 @@ function SettingsPanel({
               onClick={() => (document.querySelector('input[type="file"]') as HTMLInputElement)?.click()}
               style={{ fontFamily: FONT.heading, fontSize: 11, color: "var(--t-accent)", letterSpacing: "0.08em", background: "none", border: "none", cursor: "pointer", marginTop: 6 }}
             >
-              {currentUser.avatar_url ? "Сменить фото" : "Загрузить фото"}
+              {t("settings_avatar")}
             </button>
             {avatarError && <div className="text-[10px] text-[#f87171] mt-1">{avatarError}</div>}
           </div>
@@ -1113,7 +1109,7 @@ function SettingsPanel({
         <form onSubmit={handleSave} className="space-y-4 max-w-lg">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <label style={{ display: "block", fontFamily: FONT.heading, fontSize: 10, fontWeight: 700, letterSpacing: "0.15em", color: "var(--t-text-dim)", marginBottom: 6, textTransform: "uppercase" }}>Имя и Фамилия</label>
+              <label style={{ display: "block", fontFamily: FONT.heading, fontSize: 10, fontWeight: 700, letterSpacing: "0.15em", color: "var(--t-text-dim)", marginBottom: 6, textTransform: "uppercase" }}>{t("settings_name")}</label>
               <input
                 value={displayName}
                 onChange={e => { setDisplayName(e.target.value); setError(""); setSuccess(false); }}
@@ -1123,7 +1119,7 @@ function SettingsPanel({
               />
             </div>
             <div>
-              <label style={{ display: "block", fontFamily: FONT.heading, fontSize: 10, fontWeight: 700, letterSpacing: "0.15em", color: "var(--t-text-dim)", marginBottom: 6, textTransform: "uppercase" }}>Должность</label>
+              <label style={{ display: "block", fontFamily: FONT.heading, fontSize: 10, fontWeight: 700, letterSpacing: "0.15em", color: "var(--t-text-dim)", marginBottom: 6, textTransform: "uppercase" }}>{t("settings_position")}</label>
               <input
                 value={position}
                 onChange={e => { setPosition(e.target.value); setSuccess(false); }}
@@ -1133,7 +1129,7 @@ function SettingsPanel({
               />
             </div>
             <div>
-              <label style={{ display: "block", fontFamily: FONT.heading, fontSize: 10, fontWeight: 700, letterSpacing: "0.15em", color: "var(--t-text-dim)", marginBottom: 6, textTransform: "uppercase" }}>Отдел</label>
+              <label style={{ display: "block", fontFamily: FONT.heading, fontSize: 10, fontWeight: 700, letterSpacing: "0.15em", color: "var(--t-text-dim)", marginBottom: 6, textTransform: "uppercase" }}>{t("settings_dept")}</label>
               <input
                 value={department}
                 onChange={e => { setDepartment(e.target.value); setSuccess(false); }}
@@ -1143,7 +1139,7 @@ function SettingsPanel({
               />
             </div>
             <div className="col-span-2">
-              <label style={{ display: "block", fontFamily: FONT.heading, fontSize: 10, fontWeight: 700, letterSpacing: "0.15em", color: "var(--t-text-dim)", marginBottom: 6, textTransform: "uppercase" }}>Телефон</label>
+              <label style={{ display: "block", fontFamily: FONT.heading, fontSize: 10, fontWeight: 700, letterSpacing: "0.15em", color: "var(--t-text-dim)", marginBottom: 6, textTransform: "uppercase" }}>{t("settings_phone")}</label>
               <input value={currentUser.phone || ""} readOnly
                 className="w-full px-4 py-2.5 cursor-not-allowed"
                 style={{ background: "var(--t-bg-main)", border: "1px solid var(--t-border)", borderRadius: 10, color: "var(--t-text-dim)", fontFamily: FONT.mono, fontSize: 12 }}
@@ -1159,7 +1155,7 @@ function SettingsPanel({
           )}
           {success && (
             <div className="flex items-center gap-2 px-4 py-2.5" style={{ background: "rgba(50,255,100,0.08)", border: "1px solid rgba(50,200,80,0.3)", borderRadius: 10, fontFamily: FONT.body, fontSize: 12, color: "#4ade80" }}>
-              <Icon name="CheckCircle" size={12} style={{ color: "#4ade80", filter: "drop-shadow(0 0 4px rgba(50,200,80,0.6))" }} /> Профиль сохранён
+              <Icon name="CheckCircle" size={12} style={{ color: "#4ade80", filter: "drop-shadow(0 0 4px rgba(50,200,80,0.6))" }} /> {t("settings_saved")}
             </div>
           )}
 
@@ -1171,9 +1167,9 @@ function SettingsPanel({
               {saving ? (
                 <span className="flex items-center gap-2">
                   <span className="w-3 h-3 border-2 rounded-full animate-spin inline-block" style={{ borderColor: "rgba(255,255,255,0.3)", borderTopColor: "#fff" }} />
-                  СОХРАНЯЕМ...
+                  {t("settings_saving")}
                 </span>
-              ) : "СОХРАНИТЬ"}
+              ) : t("settings_save")}
             </button>
             {isDirty && (
               <button
@@ -1187,7 +1183,7 @@ function SettingsPanel({
                 className="px-4 py-2.5 transition-all"
                 style={{ fontFamily: FONT.heading, fontWeight: 600, fontSize: 12, letterSpacing: "0.08em", color: "var(--t-text-dim)", background: "none", border: "1px solid var(--t-border)", borderRadius: 10, cursor: "pointer" }}
               >
-                ОТМЕНА
+                {t("common_cancel")}
               </button>
             )}
           </div>
@@ -1214,6 +1210,21 @@ function useIsMobile() {
 function AppInner() {
   useTheme(); // подписка на тему (применяется через CSS body[data-theme])
   const isMobile = useIsMobile();
+  const { t } = useLang();
+
+  const navItems = [
+    { id: "chats" as Section, icon: "MessageSquare", label: t("nav_chats") },
+    { id: "contacts" as Section, icon: "Users", label: t("nav_contacts") },
+    { id: "calls" as Section, icon: "Phone", label: t("nav_calls") },
+    { id: "video" as Section, icon: "Video", label: t("nav_video") },
+    { id: "files" as Section, icon: "FolderOpen", label: t("nav_files") },
+    { id: "bots" as Section, icon: "Bot", label: t("nav_bots") },
+  ];
+
+  const bottomNav = [
+    { id: "settings" as Section, icon: "Settings", label: t("nav_settings") },
+    { id: "analytics" as Section, icon: "BarChart2", label: t("nav_analytics") },
+  ];
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -1754,6 +1765,7 @@ function AppInner() {
           }}>
             {currentUser.avatar_initials}
           </button>
+          <LanguageSwitcher compact />
         </div>
       </nav>
 
@@ -1785,6 +1797,9 @@ function AppInner() {
             );
           })}
           {/* Аватар/настройки */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 6px", flex: "0 0 auto" }}>
+            <LanguageSwitcher compact />
+          </div>
           <button onClick={() => { setSection("settings"); setMobilePanelOpen(false); }}
             style={{
               display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
@@ -1798,7 +1813,7 @@ function AppInner() {
               display: "flex", alignItems: "center", justifyContent: "center",
               fontFamily: FONT.heading, fontWeight: 700, fontSize: 9, color: "#fff",
             }}>{currentUser.avatar_initials}</div>
-            <span style={{ fontSize: 8, fontFamily: FONT.heading, fontWeight: 600, letterSpacing: "0.05em", color: section === "settings" ? "var(--t-accent)" : "var(--t-text-dim)" }}>Я</span>
+            <span style={{ fontSize: 8, fontFamily: FONT.heading, fontWeight: 600, letterSpacing: "0.05em", color: section === "settings" ? "var(--t-accent)" : "var(--t-text-dim)" }}>{t("nav_me")}</span>
           </button>
         </nav>
       )}
@@ -1818,12 +1833,12 @@ function AppInner() {
             }}>
               <div className="px-4 pt-4 pb-3" style={{ borderBottom: "1px solid var(--t-border)", background: `linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))` }}>
                 <div className="flex items-center justify-between mb-3">
-                  <h2 style={{ ...heading3d(12), letterSpacing: "0.12em" }}>ЧАТЫ</h2>
+                  <h2 style={{ ...heading3d(12), letterSpacing: "0.12em" }}>{t("chats_title")}</h2>
                   {loadingChats && <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--t-accent)", borderTopColor: "transparent" }} />}
                 </div>
                 <div className="relative">
                   <Icon name="Search" size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={liveIcon(0)} />
-                  <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Поиск..."
+                  <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder={t("chats_search")}
                     className="w-full pl-8 pr-3 py-2 focus:outline-none transition-all"
                     style={{ background: "var(--t-bg-panel)", border: "1px solid var(--t-border)", borderRadius: 10, color: "var(--t-text)", fontFamily: FONT.body, fontSize: 12, boxShadow: "inset 0 2px 6px rgba(0,0,0,0.3)" }} />
                 </div>
@@ -1855,7 +1870,7 @@ function AppInner() {
                   </button>
                 ))}
                 {chats.length === 0 && !loadingChats && (
-                  <div className="p-6 text-center" style={{ color: "var(--t-text-dim)", fontFamily: FONT.body, fontSize: 12 }}>Нет чатов</div>
+                  <div className="p-6 text-center" style={{ color: "var(--t-text-dim)", fontFamily: FONT.body, fontSize: 12 }}>{t("chats_empty")}</div>
                 )}
               </div>
             </div>
@@ -1880,7 +1895,7 @@ function AppInner() {
                       <div>
                         <div style={{ fontFamily: FONT.heading, fontWeight: 700, fontSize: 14, color: "var(--t-text)", letterSpacing: "0.05em", filter: "drop-shadow(0 1px 4px color-mix(in srgb, var(--t-accent) 30%, transparent))" }}>{activeChat.name}</div>
                         <div style={{ fontFamily: FONT.body, fontSize: 11, color: activeChat.online ? "var(--t-online)" : "var(--t-text-dim)" }}>
-                          {activeChat.type === "personal" ? (activeChat.online ? "● В сети" : "Не в сети") : "Групповой чат"}
+                          {activeChat.type === "personal" ? (activeChat.online ? t("chats_online") : t("chats_offline")) : t("chats_group")}
                         </div>
                       </div>
                     </div>
@@ -1961,7 +1976,7 @@ function AppInner() {
                         value={msgInput}
                         onChange={e => setMsgInput(e.target.value)}
                         onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                        placeholder="Написать сообщение..."
+                        placeholder={t("msg_placeholder")}
                         className="flex-1 bg-transparent focus:outline-none msg-text"
                         style={{ color: "var(--t-text)", fontFamily: FONT.body, fontSize: 13, letterSpacing: "0.01em" }}
                       />
@@ -1979,7 +1994,7 @@ function AppInner() {
                     <div style={{ width: 80, height: 80, borderRadius: 20, margin: "0 auto 16px", ...card3d(), display: "flex", alignItems: "center", justifyContent: "center", animation: "card3dFloat 5s ease-in-out infinite" }}>
                       <Icon name="MessageSquare" size={36} style={liveIcon()} />
                     </div>
-                    <p style={{ fontFamily: FONT.heading, fontSize: 14, color: "var(--t-text-dim)", letterSpacing: "0.1em" }}>ВЫБЕРИТЕ ЧАТ</p>
+                    <p style={{ fontFamily: FONT.heading, fontSize: 14, color: "var(--t-text-dim)", letterSpacing: "0.1em" }}>{t("common_select_chat")}</p>
                   </div>
                 </div>
               )}
@@ -2027,12 +2042,12 @@ function AppInner() {
                 }}>
                   <div className="px-4 pt-4 pb-3 border-b" style={{ borderColor: "var(--t-border)" }}>
                     <div className="flex items-center justify-between mb-3">
-                      <h2 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>КОНТАКТЫ</h2>
+                      <h2 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>{t("contacts_title")}</h2>
                       <span className="text-[10px]" style={{ color: "var(--t-text-dim)" }}>{allContacts.length}</span>
                     </div>
                     <div className="relative">
                       <Icon name="Search" size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--t-text-dim)" }} />
-                      <input value={contactSearch} onChange={e => setContactSearch(e.target.value)} placeholder="Поиск..."
+                      <input value={contactSearch} onChange={e => setContactSearch(e.target.value)} placeholder={t("contacts_search")}
                         className="w-full rounded-sm pl-7 pr-3 py-1.5 text-xs placeholder-[#4a5568] focus:outline-none"
                         style={{ background: "var(--t-bg-active)", border: "1px solid var(--t-border)", color: "var(--t-text-muted)" }} />
                     </div>
@@ -2057,7 +2072,7 @@ function AppInner() {
                         <div style={{ ...card3d(), padding: "14px", display: "inline-flex" }}>
                           <Icon name="UserX" size={22} style={liveIcon(0)} />
                         </div>
-                        <span style={{ ...heading3d(11), letterSpacing: "0.12em" }}>НЕТ ДАННЫХ</span>
+                        <span style={{ ...heading3d(11), letterSpacing: "0.12em" }}>{t("contacts_empty")}</span>
                       </div>
                     )}
                   </div>
@@ -2070,14 +2085,14 @@ function AppInner() {
                           <Icon name="ChevronLeft" size={20} />
                         </button>
                       )}
-                      <h3 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>КОНТАКТЫ ({filtered.length})</h3>
+                      <h3 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>{t("contacts_title")} ({filtered.length})</h3>
                     </div>
                     <div className="flex gap-2">
                       <button onClick={() => setShowAddContact(true)} className="btn-3d px-3 py-1.5 text-[10px] flex items-center gap-1.5" style={{ ...btn3d("var(--t-accent)") }}>
-                        <Icon name="UserPlus" size={11} /> ДОБАВИТЬ
+                        <Icon name="UserPlus" size={11} /> {t("contacts_add")}
                       </button>
                       <button onClick={() => setShowInviteModal(true)} className="btn-3d px-3 py-1.5 text-[10px] flex items-center gap-1.5" style={{ ...btn3d("var(--t-accent)") }}>
-                        <Icon name="Link" size={11} /> ПРИГЛАСИТЬ
+                        <Icon name="Link" size={11} /> {t("contacts_invite")}
                       </button>
                     </div>
                   </div>
@@ -2104,18 +2119,18 @@ function AppInner() {
                           {c.source === "internal" || c.linked_user_id ? (
                             <>
                               <button onClick={() => openChatWith(c.linked_user_id || c.id)} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
-                                <Icon name="MessageSquare" size={11} style={liveIcon(index * 0.3)} /> ЧАТ
+                                <Icon name="MessageSquare" size={11} style={liveIcon(index * 0.3)} /> {t("contacts_chat")}
                               </button>
                               <button onClick={() => startCall(c as unknown as Contact, "audio")} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
-                                <Icon name="Phone" size={11} style={liveIcon(index * 0.3 + 0.1)} /> ЗВОНОК
+                                <Icon name="Phone" size={11} style={liveIcon(index * 0.3 + 0.1)} /> {t("contacts_call")}
                               </button>
                               <button onClick={() => startCall(c as unknown as Contact, "video")} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
-                                <Icon name="Video" size={11} style={liveIcon(index * 0.3 + 0.2)} /> ВИДЕО
+                                <Icon name="Video" size={11} style={liveIcon(index * 0.3 + 0.2)} /> {t("contacts_video")}
                               </button>
                             </>
                           ) : (
                             <div className="text-[10px] w-full text-center py-1" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>
-                              Не зарегистрирован в системе
+                              {t("contacts_not_reg")}
                             </div>
                           )}
                         </div>
@@ -2128,17 +2143,17 @@ function AppInner() {
                         <Icon name="Users" size={32} style={liveIcon(0)} />
                       </div>
                       <div className="text-center">
-                        <p style={{ ...heading3d(13), letterSpacing: "0.1em", marginBottom: 6 }}>НЕТ КОНТАКТОВ</p>
+                        <p style={{ ...heading3d(13), letterSpacing: "0.1em", marginBottom: 6 }}>{t("contacts_none")}</p>
                         <p className="text-xs" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>
-                          Добавьте контакт вручную или отправьте пригласительную ссылку
+                          {t("contacts_none_sub")}
                         </p>
                       </div>
                       <div className="flex gap-3">
                         <button onClick={() => setShowAddContact(true)} className="btn-3d px-4 py-2 text-xs flex items-center gap-2" style={{ ...btn3d("var(--t-accent)") }}>
-                          <Icon name="UserPlus" size={14} /> ДОБАВИТЬ ВРУЧНУЮ
+                          <Icon name="UserPlus" size={14} /> {t("contacts_add_manual")}
                         </button>
                         <button onClick={() => setShowInviteModal(true)} className="btn-3d px-4 py-2 text-xs flex items-center gap-2" style={{ ...btn3d("var(--t-accent)") }}>
-                          <Icon name="Link" size={14} /> ОТПРАВИТЬ ССЫЛКУ
+                          <Icon name="Link" size={14} /> {t("contacts_send_link")}
                         </button>
                       </div>
                     </div>
@@ -2159,7 +2174,7 @@ function AppInner() {
               boxShadow: "2px 0 12px rgba(0,0,0,0.3)"
             }}>
               <div className="px-4 pt-4 pb-3 border-b flex items-center justify-between" style={{ borderColor: "var(--t-border)" }}>
-                <h2 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>ЗВОНКИ</h2>
+                <h2 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>{t("calls_title")}</h2>
                 {loadingCalls && <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--t-accent)", borderTopColor: "transparent" }} />}
               </div>
               <div className="flex-1 overflow-y-auto">
@@ -2183,7 +2198,7 @@ function AppInner() {
                     <div style={{ ...card3d(), padding: "14px", display: "inline-flex" }}>
                       <Icon name="PhoneOff" size={22} style={liveIcon(0)} />
                     </div>
-                    <span style={{ ...heading3d(11), letterSpacing: "0.12em" }}>НЕТ ДАННЫХ</span>
+                    <span style={{ ...heading3d(11), letterSpacing: "0.12em" }}>{t("calls_empty")}</span>
                   </div>
                 )}
               </div>
@@ -2193,8 +2208,8 @@ function AppInner() {
                 <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4" style={{ ...card3d() }}>
                   <Icon name="Phone" size={32} style={liveIcon(0)} />
                 </div>
-                <p className="text-sm font-medium mb-1" style={{ fontFamily: FONT.heading, fontWeight: 700, color: "var(--t-text)" }}>НОВЫЙ ЗВОНОК</p>
-                <p className="text-xs mb-5" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>Выберите контакт для звонка</p>
+                <p className="text-sm font-medium mb-1" style={{ fontFamily: FONT.heading, fontWeight: 700, color: "var(--t-text)" }}>{t("calls_new")}</p>
+                <p className="text-xs mb-5" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{t("calls_new_sub")}</p>
                 <div className="flex gap-2 justify-center">
                   {contacts.slice(0, 4).map((c, index) => (
                     <button key={c.id} onClick={() => startCall(c, "audio")} className="flex flex-col items-center gap-1.5 p-2 rounded-sm transition-colors">
@@ -2208,10 +2223,10 @@ function AppInner() {
               </div>
               <div className="flex gap-3">
                 <button onClick={() => { setSection("contacts"); }} className="btn-3d px-4 py-2 text-xs flex items-center gap-1.5" style={{ ...btn3d("#22c55e") }}>
-                  <Icon name="Phone" size={13} /> АУДИОЗВОНОК
+                  <Icon name="Phone" size={13} /> {t("calls_audio")}
                 </button>
                 <button onClick={() => { setSection("contacts"); }} className="btn-3d px-4 py-2 text-xs flex items-center gap-1.5" style={{ ...btn3d("var(--t-accent)") }}>
-                  <Icon name="Video" size={13} /> ВИДЕОЗВОНОК
+                  <Icon name="Video" size={13} /> {t("calls_video_call")}
                 </button>
               </div>
             </div>
@@ -2228,8 +2243,8 @@ function AppInner() {
               boxShadow: "2px 0 12px rgba(0,0,0,0.3)"
             }}>
               <div className="px-4 pt-4 pb-3 border-b" style={{ borderColor: "var(--t-border)" }}>
-                <h2 style={{ ...heading3d(13), letterSpacing: "0.12em", marginBottom: 8 }}>ВИДЕОЗВОНОК</h2>
-                <p className="text-[11px]" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>Выберите контакт</p>
+                <h2 style={{ ...heading3d(13), letterSpacing: "0.12em", marginBottom: 8 }}>{t("video_title")}</h2>
+                <p className="text-[11px]" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{t("video_select")}</p>
               </div>
               <div className="flex-1 overflow-y-auto">
                 {contacts.map((c, index) => (
@@ -2270,8 +2285,8 @@ function AppInner() {
                   <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto" style={{ ...card3d() }}>
                     <Icon name="Video" size={32} style={liveIcon(0)} />
                   </div>
-                  <h3 style={{ ...heading3d(15), letterSpacing: "0.12em" }}>ВИДЕОЗВОНКИ</h3>
-                  <p className="text-xs" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>Выберите контакт слева для начала видеозвонка</p>
+                  <h3 style={{ ...heading3d(15), letterSpacing: "0.12em" }}>{t("video_heading")}</h3>
+                  <p className="text-xs" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{t("video_sub")}</p>
                 </div>
               )}
             </div>
@@ -2283,11 +2298,11 @@ function AppInner() {
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="px-6 pt-5 pb-4 border-b flex items-center justify-between flex-shrink-0" style={{ borderColor: "var(--t-border)", background: "linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))" }}>
               <div>
-                <h2 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>ФАЙЛЫ</h2>
-                <p className="text-xs mt-0.5" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>Все файлы переписок</p>
+                <h2 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>{t("files_title")}</h2>
+                <p className="text-xs mt-0.5" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{t("files_sub")}</p>
               </div>
               <button className="btn-3d px-3 py-1.5 text-xs flex items-center gap-1.5" style={{ ...btn3d("var(--t-accent)") }}>
-                <Icon name="Upload" size={12} /> ЗАГРУЗИТЬ
+                <Icon name="Upload" size={12} /> {t("files_upload")}
               </button>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -2295,7 +2310,7 @@ function AppInner() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b" style={{ borderColor: "var(--t-border)", background: "linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))" }}>
-                      {["Имя файла", "Размер", "Отправитель", "Дата", ""].map((h, i) => (
+                      {[t("files_name"), t("files_size"), t("files_sender"), t("files_date"), ""].map((h, i) => (
                         <th key={h} className="text-left px-4 py-2.5 text-[10px] tracking-widest uppercase" style={{ ...heading3d(10), letterSpacing: "0.12em" }}>{h}</th>
                       ))}
                     </tr>
@@ -2322,11 +2337,11 @@ function AppInner() {
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="px-6 pt-5 pb-4 border-b flex items-center justify-between flex-shrink-0" style={{ borderColor: "var(--t-border)", background: "linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))" }}>
               <div>
-                <h2 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>БОТЫ</h2>
-                <p className="text-xs mt-0.5" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>Корпоративные автоматизации</p>
+                <h2 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>{t("bots_title")}</h2>
+                <p className="text-xs mt-0.5" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{t("bots_sub")}</p>
               </div>
               <button className="btn-3d px-3 py-1.5 text-xs flex items-center gap-1.5" style={{ ...btn3d("var(--t-accent)") }}>
-                <Icon name="Plus" size={12} /> СОЗДАТЬ БОТА
+                <Icon name="Plus" size={12} /> {t("bots_create")}
               </button>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-5">
@@ -2347,8 +2362,8 @@ function AppInner() {
                     </div>
                     <p className="text-[11px] leading-relaxed mb-3" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{bot.description}</p>
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono" style={{ fontFamily: FONT.mono, color: "var(--t-text-dim)" }}>{bot.requests.toLocaleString()} запросов</span>
-                      <button className="btn-3d px-2 py-1 text-[10px]" style={{ ...btn3d("var(--t-accent)") }}>ОТКРЫТЬ →</button>
+                      <span className="text-[10px] font-mono" style={{ fontFamily: FONT.mono, color: "var(--t-text-dim)" }}>{bot.requests.toLocaleString()} {t("bots_requests")}</span>
+                      <button className="btn-3d px-2 py-1 text-[10px]" style={{ ...btn3d("var(--t-accent)") }}>{t("bots_open")}</button>
                     </div>
                   </div>
                 ))}
@@ -2372,17 +2387,17 @@ function AppInner() {
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="px-6 pt-5 pb-4 border-b flex items-center justify-between flex-shrink-0" style={{ borderColor: "var(--t-border)", background: "linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))" }}>
               <div>
-                <h2 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>АНАЛИТИКА</h2>
-                <p className="text-xs mt-0.5" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>Панель администратора</p>
+                <h2 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>{t("analytics_title")}</h2>
+                <p className="text-xs mt-0.5" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{t("analytics_sub")}</p>
               </div>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-5">
               <div className={`grid gap-3 mb-5 ${isMobile ? "grid-cols-2" : "grid-cols-4"}`}>
                 {[
-                  { label: "Активных пользователей", value: String(contacts.filter(c => c.online).length + 1), icon: "Users", color: "var(--t-accent)" },
-                  { label: "Сообщений в системе", value: String(messages.length), icon: "MessageSquare", color: "#22c55e" },
-                  { label: "Активных чатов", value: String(chats.length), icon: "Hash", color: "#f59e0b" },
-                  { label: "Ботов запущено", value: String(STATIC_BOTS.filter(b => b.active).length), icon: "Bot", color: "#a78bfa" },
+                  { label: t("analytics_users"), value: String(contacts.filter(c => c.online).length + 1), icon: "Users", color: "var(--t-accent)" },
+                  { label: t("analytics_msgs"), value: String(messages.length), icon: "MessageSquare", color: "#22c55e" },
+                  { label: t("analytics_chats"), value: String(chats.length), icon: "Hash", color: "#f59e0b" },
+                  { label: t("analytics_bots"), value: String(STATIC_BOTS.filter(b => b.active).length), icon: "Bot", color: "#a78bfa" },
                 ].map((kpi, index) => (
                   <div key={kpi.label} className="p-4 transition-all" style={{ ...card3d(kpi.color, 0.18), animation: "card3dFloat 4s ease-in-out infinite", animationDelay: `${index * 0.2}s` }}>
                     <div className="flex items-center justify-between mb-3">
@@ -2394,7 +2409,7 @@ function AppInner() {
                 ))}
               </div>
               <div className="p-4" style={{ ...card3d() }}>
-                <h4 style={{ ...heading3d(13), letterSpacing: "0.12em", marginBottom: 16 }}>ПОЛЬЗОВАТЕЛИ</h4>
+                <h4 style={{ ...heading3d(13), letterSpacing: "0.12em", marginBottom: 16 }}>{t("analytics_members")}</h4>
                 <div className="space-y-2.5">
                   {contacts.slice(0, 5).map((c, i) => (
                     <div key={c.id} className="flex items-center gap-3">
@@ -2404,7 +2419,7 @@ function AppInner() {
                       </div>
                       <div className="flex-1 text-xs" style={{ fontFamily: FONT.heading, fontWeight: 700, color: "var(--t-text)" }}>{c.display_name}</div>
                       <span className="text-[11px]" style={{ fontFamily: FONT.body, color: "var(--t-accent)" }}>{c.department}</span>
-                      <span className="text-[10px]" style={{ fontFamily: FONT.body, color: c.online ? "#22c55e" : "var(--t-text-dim)", textShadow: c.online ? "0 0 6px #22c55e" : undefined }}>{c.online ? "В СЕТИ" : "НЕ В СЕТИ"}</span>
+                      <span className="text-[10px]" style={{ fontFamily: FONT.body, color: c.online ? "#22c55e" : "var(--t-text-dim)", textShadow: c.online ? "0 0 6px #22c55e" : undefined }}>{c.online ? t("analytics_online").toUpperCase() : t("chats_offline").toUpperCase()}</span>
                     </div>
                   ))}
                 </div>

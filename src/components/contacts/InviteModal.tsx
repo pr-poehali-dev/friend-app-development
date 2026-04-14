@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { FONT, btn3d, card3d, heading3d, input3d } from "@/styles/theme3d";
 import Icon from "@/components/ui/icon";
+import { useLang } from "@/LangContext";
 
 interface Invite {
   id: number;
@@ -29,6 +30,7 @@ function QRCode({ value, size = 200 }: { value: string; size?: number }) {
 }
 
 export default function InviteModal({ onClose, apiUrl, sessionId }: Props) {
+  const { t } = useLang();
   const [invites, setInvites] = useState<Invite[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -123,7 +125,7 @@ export default function InviteModal({ onClose, apiUrl, sessionId }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
       <div className="w-full max-w-lg mx-4" style={{ ...card3d(), padding: 0, overflow: "hidden", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
         <div className="flex items-center justify-between px-5 py-4 border-b flex-shrink-0" style={{ borderColor: "var(--t-border)" }}>
-          <span style={{ ...heading3d(14), letterSpacing: "0.1em" }}>ПРИГЛАСИТЕЛЬНЫЕ ССЫЛКИ</span>
+          <span style={{ ...heading3d(14), letterSpacing: "0.1em" }}>{t("invite_title")}</span>
           <button onClick={onClose} style={{ color: "var(--t-text-dim)", cursor: "pointer" }}>
             <Icon name="X" size={18} />
           </button>
@@ -132,12 +134,12 @@ export default function InviteModal({ onClose, apiUrl, sessionId }: Props) {
         <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
           {/* Создать новую ссылку */}
           <div className="p-4 rounded-lg" style={{ background: "var(--t-bg-panel)", border: "1px solid var(--t-border)" }}>
-            <p className="text-[11px] mb-2" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)", letterSpacing: "0.06em" }}>СОЗДАТЬ НОВУЮ ССЫЛКУ</p>
+            <p className="text-[11px] mb-2" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)", letterSpacing: "0.06em" }}>{t("invite_new")}</p>
             <div className="flex gap-2">
               <input
                 value={label}
                 onChange={e => { setLabel(e.target.value); setError(""); }}
-                placeholder="Название (необязательно)"
+                placeholder={t("invite_label_ph")}
                 className="flex-1 px-3 py-2 text-xs rounded-sm outline-none"
                 style={{ ...input3d(), fontSize: 12 }}
                 onKeyDown={e => e.key === "Enter" && createInvite()}
@@ -146,7 +148,7 @@ export default function InviteModal({ onClose, apiUrl, sessionId }: Props) {
                 className="btn-3d px-4 py-2 text-xs flex items-center gap-1.5"
                 style={{ ...btn3d("var(--t-accent)"), opacity: creating ? 0.7 : 1 }}>
                 {creating ? <Icon name="Loader" size={13} className="animate-spin" /> : <Icon name="Plus" size={13} />}
-                СОЗДАТЬ
+                {t("invite_create")}
               </button>
             </div>
             {error && (
@@ -162,7 +164,7 @@ export default function InviteModal({ onClose, apiUrl, sessionId }: Props) {
           ) : invites.length === 0 ? (
             <div className="text-center py-8">
               <Icon name="Link" size={32} className="mx-auto mb-2" style={{ color: "var(--t-text-dim)" }} />
-              <p className="text-xs" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>Нет ссылок. Создайте первую!</p>
+              <p className="text-xs" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{t("invite_empty")}</p>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
@@ -176,10 +178,10 @@ export default function InviteModal({ onClose, apiUrl, sessionId }: Props) {
                   onClick={() => { setSelectedInvite(invite); setShowQR(false); }}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-medium" style={{ fontFamily: FONT.heading, fontWeight: 700, color: "var(--t-text)" }}>
-                      {invite.label || "Без названия"}
+                      {invite.label || t("invite_unnamed")}
                     </span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "var(--t-bg-active)", color: "var(--t-text-dim)", fontFamily: FONT.mono }}>
-                      {invite.used_count} переходов
+                      {invite.used_count} {t("invite_uses")}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 mb-3">
@@ -199,12 +201,12 @@ export default function InviteModal({ onClose, apiUrl, sessionId }: Props) {
                             <button onClick={() => downloadQR(invite.code)}
                               className="btn-3d px-3 py-1.5 text-[10px] flex items-center gap-1"
                               style={btn3d("var(--t-accent)")}>
-                              <Icon name="Download" size={11} /> СКАЧАТЬ
+                              <Icon name="Download" size={11} /> {t("invite_download")}
                             </button>
                             <button onClick={() => setShowQR(false)}
                               className="px-3 py-1.5 text-[10px] rounded-sm"
                               style={{ background: "var(--t-bg-active)", color: "var(--t-text-muted)", fontFamily: FONT.heading, fontWeight: 700, letterSpacing: "0.06em", border: "1px solid var(--t-border)", cursor: "pointer" }}>
-                              СКРЫТЬ QR
+                              {t("invite_hide_qr")}
                             </button>
                           </div>
                         </div>
@@ -214,12 +216,12 @@ export default function InviteModal({ onClose, apiUrl, sessionId }: Props) {
                             className="btn-3d px-3 py-1.5 text-[10px] flex items-center gap-1"
                             style={btn3d(copied ? "#22c55e" : "var(--t-accent)")}>
                             <Icon name={copied ? "Check" : "Copy"} size={11} />
-                            {copied ? "СКОПИРОВАНО" : "КОПИРОВАТЬ"}
+                            {copied ? t("invite_copied") : t("invite_copy")}
                           </button>
                           <button onClick={() => shareLink(invite.code)}
                             className="btn-3d px-3 py-1.5 text-[10px] flex items-center gap-1"
                             style={btn3d("var(--t-accent)")}>
-                            <Icon name="Share2" size={11} /> ОТПРАВИТЬ
+                            <Icon name="Share2" size={11} /> {t("invite_share")}
                           </button>
                           <button onClick={() => sendViaEmail(invite.code)}
                             className="btn-3d px-3 py-1.5 text-[10px] flex items-center gap-1"
@@ -229,7 +231,7 @@ export default function InviteModal({ onClose, apiUrl, sessionId }: Props) {
                           <button onClick={() => setShowQR(true)}
                             className="btn-3d px-3 py-1.5 text-[10px] flex items-center gap-1"
                             style={btn3d("var(--t-accent)")}>
-                            <Icon name="QrCode" size={11} /> QR-КОД
+                            <Icon name="QrCode" size={11} /> {t("invite_qr")}
                           </button>
                         </div>
                       )}
