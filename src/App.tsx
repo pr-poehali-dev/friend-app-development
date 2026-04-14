@@ -3513,6 +3513,16 @@ function AppInner() {
                             style={{ background: adminSelectedUser.role === "admin" ? "#6b7280" : "#8b5cf6", color: "#fff", fontFamily: FONT.mono, border: "none" }}>
                             <Icon name="Shield" size={11} /> {adminSelectedUser.role === "admin" ? "СНЯТЬ ADMIN" : "НАЗНАЧИТЬ ADMIN"}
                           </button>
+                          <button onClick={async () => {
+                              if (!confirm(`Удалить пользователя «${adminSelectedUser.display_name}»? Действие необратимо.`)) return;
+                              await fetch(`${API.admin}?action=delete_user`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ user_id: adminSelectedUser.id }) });
+                              setAdminSelectedUser(null);
+                              loadAdminUsers();
+                            }}
+                            className="px-3 py-1.5 text-[10px] rounded flex items-center gap-1"
+                            style={{ background: "#7f1d1d", color: "#fca5a5", fontFamily: FONT.mono, border: "1px solid #ef4444" }}>
+                            <Icon name="Trash2" size={11} /> УДАЛИТЬ
+                          </button>
                         </div>
                       </div>
 

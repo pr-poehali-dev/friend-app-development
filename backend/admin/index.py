@@ -285,6 +285,32 @@ def handler(event: dict, context) -> dict:
                 conn.commit()
                 return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
 
+            # ── POST delete_user — удалить пользователя ──────────────
+            if action == "delete_user":
+                uid = int(body.get("user_id", 0))
+                if not uid:
+                    return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "user_id required"})}
+                if uid == admin_id:
+                    return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "Нельзя удалить себя"})}
+                # Каскадная очистка
+                for tname in ["bot_messages", "notifications", "upload_sessions", "user_files",
+                               "message_reactions", "sms_codes", "email_codes", "admin_logs"]:
+                    cur.execute(f"DELETE FROM {tbl(tname)} WHERE user_id = %s", (uid,))
+                cur.execute(f"DELETE FROM {tbl('webrtc_signals')} WHERE from_user_id=%s OR to_user_id=%s", (uid, uid))
+                cur.execute(f"DELETE FROM {tbl('calls')} WHERE caller_id=%s OR callee_id=%s", (uid, uid))
+                cur.execute(f"DELETE FROM {tbl('invites')} WHERE created_by=%s", (uid,))
+                cur.execute(f"DELETE FROM {tbl('external_contacts')} WHERE owner_id=%s OR linked_user_id=%s", (uid, uid))
+                cur.execute(f"DELETE FROM {tbl('user_bans')} WHERE user_id=%s OR banned_by=%s", (uid, uid))
+                cur.execute(f"DELETE FROM {tbl('messages')} WHERE sender_id=%s", (uid,))
+                cur.execute(f"DELETE FROM {tbl('chat_members')} WHERE user_id=%s", (uid,))
+                # Удалить осиротевшие чаты
+                cur.execute(f"""DELETE FROM {tbl('chats')} WHERE id NOT IN (
+                    SELECT DISTINCT chat_id FROM {tbl('chat_members')})""")
+                cur.execute(f"DELETE FROM {tbl('sessions')} WHERE user_id=%s", (uid,))
+                cur.execute(f"DELETE FROM {tbl('users')} WHERE id=%s", (uid,))
+                conn.commit()
+                return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
+
     finally:
         conn.close()
 
