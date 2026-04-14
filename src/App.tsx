@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, createContext, useContext } from "react";
 import Icon from "@/components/ui/icon";
 import { FONT, card3d, btn3d, heading3d, liveIcon, msgOwn, msgOther } from "@/styles/theme3d";
+import AddContactModal from "@/components/contacts/AddContactModal";
+import InviteModal from "@/components/contacts/InviteModal";
+import JoinPage from "@/components/contacts/JoinPage";
 
 // ===== THEME =====
 export type ThemeId = "dark-blue" | "whatsapp" | "telegram" | "light" | "purple" | "slate" | "teal";
@@ -78,6 +81,7 @@ const API = {
   profile: "https://functions.poehali.dev/eb1e5ec8-553a-4b79-a005-3fa365d9667b",
   avatar: "https://functions.poehali.dev/164ba4b4-9b9c-4668-8ca1-0bf6fbcbf6ab",
   calls: "https://functions.poehali.dev/af1c4fda-8213-498e-baac-420159c8fc6e",
+  contacts: "https://functions.poehali.dev/5c7f4e46-aec0-4fab-8215-3c55c316f3a3",
 };
 
 type Section = "chats" | "contacts" | "calls" | "video" | "files" | "bots" | "settings" | "analytics";
@@ -1230,6 +1234,9 @@ function AppInner() {
   const [uploadingFile, setUploadingFile] = useState(false);
   const [contactSearch, setContactSearch] = useState("");
   const [showAddContact, setShowAddContact] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [externalContacts, setExternalContacts] = useState<{id:number;display_name:string;phone?:string;email?:string;position?:string;department?:string;avatar_initials:string;online:boolean;source:string;linked_user_id?:number}[]>([]);
+  const inviteCode = new URLSearchParams(window.location.search).get("invite");
 
   // Check existing session
   useEffect(() => {
@@ -1277,6 +1284,16 @@ function AppInner() {
     } catch (e) { console.error(e); }
   }, [sessionToken, authHeaders]);
 
+  // Load external contacts
+  const loadExternalContacts = useCallback(async () => {
+    if (!sessionToken) return;
+    try {
+      const res = await fetch(API.contacts, { headers: { "X-Session-Id": sessionToken } });
+      const data = await res.json();
+      if (data.contacts) setExternalContacts(data.contacts);
+    } catch (e) { console.error(e); }
+  }, [sessionToken]);
+
   // Load messages
   const loadMessages = useCallback(async (chatId: number) => {
     if (!sessionToken) return;
@@ -1294,6 +1311,7 @@ function AppInner() {
     if (currentUser && sessionToken) {
       loadChats();
       loadContacts();
+      loadExternalContacts();
     }
   }, [currentUser, sessionToken]);
 
@@ -1557,7 +1575,32 @@ function AppInner() {
     );
   }
 
-  if (!currentUser) return <LoginScreen onLogin={handleLogin} />;
+  if (!currentUser) {
+    if (inviteCode) {
+      return (
+        <JoinPage
+          code={inviteCode}
+          apiUrl={API.contacts}
+          sessionId={null}
+          onJoined={() => { window.history.replaceState({}, "", "/"); }}
+          onLogin={() => { window.history.replaceState({}, "", "/"); }}
+        />
+      );
+    }
+    return <LoginScreen onLogin={handleLogin} />;
+  }
+
+  if (inviteCode) {
+    return (
+      <JoinPage
+        code={inviteCode}
+        apiUrl={API.contacts}
+        sessionId={sessionToken}
+        onJoined={() => { loadExternalContacts(); window.history.replaceState({}, "", "/"); setSection("contacts"); }}
+        onLogin={() => {}}
+      />
+    );
+  }
 
   // Звёзды для фона приложения
   const appStars = Array.from({ length: 80 }, (_, i) => ({
@@ -1830,93 +1873,148 @@ function AppInner() {
 
         {/* CONTACTS */}
         {section === "contacts" && (() => {
-          const filtered = contacts.filter(c =>
+          const allContacts = [
+            ...contacts.map(c => ({ ...c, source: "internal" as const })),
+            ...externalContacts.filter(ec => !contacts.some(c => c.id === ec.linked_user_id)).map(ec => ({ ...ec, username: "", source: ec.source as string })),
+          ];
+          const filtered = allContacts.filter(c =>
             c.display_name.toLowerCase().includes(contactSearch.toLowerCase()) ||
             (c.department || "").toLowerCase().includes(contactSearch.toLowerCase()) ||
             (c.position || "").toLowerCase().includes(contactSearch.toLowerCase())
           );
-          const importFromPhone = async () => {
-            if (!("contacts" in navigator)) { alert("Ваш браузер не поддерживает импорт контактов"); return; }
-            try {
-              const props = ["name", "tel"];
-              // @ts-expect-error Contact Picker API
-              const imported = await navigator.contacts.select(props, { multiple: true });
-              alert(`Импортировано ${imported.length} контактов`);
-            } catch { alert("Не удалось получить доступ к контактам"); }
-          };
           return (
-            <div className="flex flex-1 overflow-hidden">
-              <div className="w-72 flex flex-col border-r flex-shrink-0" style={{ borderColor: "var(--t-border)", background: "linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))", boxShadow: "2px 0 12px rgba(0,0,0,0.3)" }}>
-                <div className="px-4 pt-4 pb-3 border-b" style={{ borderColor: "var(--t-border)" }}>
-                  <div className="flex items-center justify-between mb-3">
-                    <h2 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>КОНТАКТЫ</h2>
-                    <span className="text-[10px]" style={{ color: "var(--t-text-dim)" }}>{contacts.length}</span>
+            <>
+              {showAddContact && sessionToken && (
+                <AddContactModal
+                  onClose={() => setShowAddContact(false)}
+                  onAdded={() => loadExternalContacts()}
+                  apiUrl={API.contacts}
+                  sessionId={sessionToken}
+                />
+              )}
+              {showInviteModal && sessionToken && (
+                <InviteModal
+                  onClose={() => setShowInviteModal(false)}
+                  apiUrl={API.contacts}
+                  sessionId={sessionToken}
+                />
+              )}
+              <div className="flex flex-1 overflow-hidden">
+                <div className="w-72 flex flex-col border-r flex-shrink-0" style={{ borderColor: "var(--t-border)", background: "linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))", boxShadow: "2px 0 12px rgba(0,0,0,0.3)" }}>
+                  <div className="px-4 pt-4 pb-3 border-b" style={{ borderColor: "var(--t-border)" }}>
+                    <div className="flex items-center justify-between mb-3">
+                      <h2 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>КОНТАКТЫ</h2>
+                      <span className="text-[10px]" style={{ color: "var(--t-text-dim)" }}>{allContacts.length}</span>
+                    </div>
+                    <div className="relative">
+                      <Icon name="Search" size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--t-text-dim)" }} />
+                      <input value={contactSearch} onChange={e => setContactSearch(e.target.value)} placeholder="Поиск..."
+                        className="w-full rounded-sm pl-7 pr-3 py-1.5 text-xs placeholder-[#4a5568] focus:outline-none"
+                        style={{ background: "var(--t-bg-active)", border: "1px solid var(--t-border)", color: "var(--t-text-muted)" }} />
+                    </div>
                   </div>
-                  <div className="relative">
-                    <Icon name="Search" size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--t-text-dim)" }} />
-                    <input value={contactSearch} onChange={e => setContactSearch(e.target.value)} placeholder="Поиск..."
-                      className="w-full rounded-sm pl-7 pr-3 py-1.5 text-xs placeholder-[#4a5568] focus:outline-none"
-                      style={{ background: "var(--t-bg-active)", border: "1px solid var(--t-border)", color: "var(--t-text-muted)" }} />
+                  <div className="flex-1 overflow-y-auto">
+                    {filtered.map(c => (
+                      <div key={`${c.source}-${c.id}`} className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors" style={{ borderBottom: "1px solid var(--t-bg-panel)" }}>
+                        <AvatarBadge initials={c.avatar_initials} online={c.online} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium truncate" style={{ color: "var(--t-text)" }}>{c.display_name}</div>
+                          <div className="text-[11px] truncate" style={{ color: "var(--t-text-dim)" }}>{c.position || c.department}</div>
+                        </div>
+                        {c.source !== "internal" && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: "color-mix(in srgb, var(--t-accent) 15%, transparent)", color: "var(--t-accent)", fontFamily: FONT.mono }}>
+                            {c.source === "invite" ? "invite" : "csv"}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                    {filtered.length === 0 && (
+                      <div className="flex flex-col items-center justify-center py-8 px-4 gap-3">
+                        <div style={{ ...card3d(), padding: "14px", display: "inline-flex" }}>
+                          <Icon name="UserX" size={22} style={liveIcon(0)} />
+                        </div>
+                        <span style={{ ...heading3d(11), letterSpacing: "0.12em" }}>НЕТ ДАННЫХ</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="flex-1 overflow-y-auto">
-                  {filtered.map(c => (
-                    <div key={c.id} className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors" style={{ borderBottom: "1px solid var(--t-bg-panel)" }}>
-                      <AvatarBadge initials={c.avatar_initials} online={c.online} />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-medium truncate" style={{ color: "var(--t-text)" }}>{c.display_name}</div>
-                        <div className="text-[11px] truncate" style={{ color: "var(--t-text-dim)" }}>{c.position || c.department}</div>
-                      </div>
+                <div className="flex-1 overflow-y-auto px-8 py-6">
+                  <div className="flex items-center justify-between mb-5 max-w-2xl">
+                    <h3 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>ВСЕ КОНТАКТЫ ({filtered.length})</h3>
+                    <div className="flex gap-2 flex-wrap">
+                      <button onClick={() => setShowAddContact(true)} className="btn-3d px-3 py-1.5 text-[10px] flex items-center gap-1.5" style={{ ...btn3d("var(--t-accent)") }}>
+                        <Icon name="UserPlus" size={11} /> ДОБАВИТЬ
+                      </button>
+                      <button onClick={() => setShowInviteModal(true)} className="btn-3d px-3 py-1.5 text-[10px] flex items-center gap-1.5" style={{ ...btn3d("var(--t-accent)") }}>
+                        <Icon name="Link" size={11} /> ПРИГЛАСИТЬ
+                      </button>
                     </div>
-                  ))}
-                  {filtered.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-8 px-4 gap-3">
-                      <div style={{ ...card3d(), padding: "14px", display: "inline-flex" }}>
-                        <Icon name="UserX" size={22} style={liveIcon(0)} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 max-w-2xl">
+                    {filtered.map((c, index) => (
+                      <div key={`${c.source}-${c.id}`} className="p-4 transition-all" style={{ ...card3d(), animation: "card3dFloat 4s ease-in-out infinite", animationDelay: `${index * 0.15}s` }}>
+                        <div className="flex items-center gap-3 mb-3">
+                          <div style={{ boxShadow: c.online ? "0 0 6px var(--t-online)" : undefined, borderRadius: "50%" }}>
+                            <AvatarBadge initials={c.avatar_initials} size="lg" online={c.online} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-medium truncate" style={{ fontFamily: FONT.heading, fontWeight: 700, color: "var(--t-text)" }}>{c.display_name}</div>
+                            <div className="text-[11px] truncate" style={{ fontFamily: FONT.body, color: "var(--t-accent)" }}>{c.department}</div>
+                          </div>
+                          {c.source !== "internal" && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0 self-start" style={{ background: "color-mix(in srgb, var(--t-accent) 15%, transparent)", color: "var(--t-accent)", fontFamily: FONT.mono }}>
+                              {c.source === "invite" ? "invite" : c.source}
+                            </span>
+                          )}
+                        </div>
+                        {c.position && <div className="text-[11px] mb-1" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{c.position}</div>}
+                        {(c as {phone?: string}).phone && <div className="text-[11px] mb-1" style={{ fontFamily: FONT.mono, color: "var(--t-text-dim)" }}>{(c as {phone?: string}).phone}</div>}
+                        <div className="flex gap-1.5 mt-3">
+                          {c.source === "internal" || (c as {linked_user_id?: number}).linked_user_id ? (
+                            <>
+                              <button onClick={() => openChatWith((c as {linked_user_id?: number}).linked_user_id || (c as {id: number}).id)} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
+                                <Icon name="MessageSquare" size={11} style={liveIcon(index * 0.3)} /> ЧАТ
+                              </button>
+                              <button onClick={() => startCall(c as Contact, "audio")} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
+                                <Icon name="Phone" size={11} style={liveIcon(index * 0.3 + 0.1)} /> ЗВОНОК
+                              </button>
+                              <button onClick={() => startCall(c as Contact, "video")} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
+                                <Icon name="Video" size={11} style={liveIcon(index * 0.3 + 0.2)} /> ВИДЕО
+                              </button>
+                            </>
+                          ) : (
+                            <div className="text-[10px] w-full text-center py-1" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>
+                              Не зарегистрирован в системе
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <span style={{ ...heading3d(11), letterSpacing: "0.12em" }}>НЕТ ДАННЫХ</span>
+                    ))}
+                  </div>
+                  {filtered.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-16 gap-4">
+                      <div style={{ ...card3d(), padding: "20px", display: "inline-flex" }}>
+                        <Icon name="Users" size={32} style={liveIcon(0)} />
+                      </div>
+                      <div className="text-center">
+                        <p style={{ ...heading3d(13), letterSpacing: "0.1em", marginBottom: 6 }}>НЕТ КОНТАКТОВ</p>
+                        <p className="text-xs" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>
+                          Добавьте контакт вручную или отправьте пригласительную ссылку
+                        </p>
+                      </div>
+                      <div className="flex gap-3">
+                        <button onClick={() => setShowAddContact(true)} className="btn-3d px-4 py-2 text-xs flex items-center gap-2" style={{ ...btn3d("var(--t-accent)") }}>
+                          <Icon name="UserPlus" size={14} /> ДОБАВИТЬ ВРУЧНУЮ
+                        </button>
+                        <button onClick={() => setShowInviteModal(true)} className="btn-3d px-4 py-2 text-xs flex items-center gap-2" style={{ ...btn3d("var(--t-accent)") }}>
+                          <Icon name="Link" size={14} /> ОТПРАВИТЬ ССЫЛКУ
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto px-8 py-6">
-                <div className="flex items-center justify-between mb-5 max-w-2xl">
-                  <h3 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>ВСЕ СОТРУДНИКИ ({filtered.length})</h3>
-                  <div className="flex gap-2">
-                    <button onClick={importFromPhone} className="btn-3d px-3 py-1.5 text-[10px] flex items-center gap-1.5" style={{ ...btn3d("var(--t-accent)") }}>
-                      <Icon name="Smartphone" size={11} /> ИМПОРТ
-                    </button>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3 max-w-2xl">
-                  {filtered.map((c, index) => (
-                    <div key={c.id} className="p-4 transition-all" style={{ ...card3d(), animation: "card3dFloat 4s ease-in-out infinite", animationDelay: `${index * 0.15}s` }}>
-                      <div className="flex items-center gap-3 mb-3">
-                        <div style={{ boxShadow: c.online ? "0 0 6px var(--t-online)" : undefined, borderRadius: "50%" }}>
-                          <AvatarBadge initials={c.avatar_initials} size="lg" online={c.online} />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium truncate" style={{ fontFamily: FONT.heading, fontWeight: 700, color: "var(--t-text)" }}>{c.display_name}</div>
-                          <div className="text-[11px] truncate" style={{ fontFamily: FONT.body, color: "var(--t-accent)" }}>{c.department}</div>
-                        </div>
-                      </div>
-                      {c.position && <div className="text-[11px] mb-1" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{c.position}</div>}
-                      <div className="flex gap-1.5 mt-3">
-                        <button onClick={() => openChatWith(c.id)} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
-                          <Icon name="MessageSquare" size={11} style={liveIcon(index * 0.3)} /> ЧАТ
-                        </button>
-                        <button onClick={() => startCall(c, "audio")} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
-                          <Icon name="Phone" size={11} style={liveIcon(index * 0.3 + 0.1)} /> ЗВОНОК
-                        </button>
-                        <button onClick={() => startCall(c, "video")} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
-                          <Icon name="Video" size={11} style={liveIcon(index * 0.3 + 0.2)} /> ВИДЕО
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            </>
           );
         })()}
 
