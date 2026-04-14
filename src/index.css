@@ -608,6 +608,18 @@ body[data-theme] label {
 }
 
 /* ── Мобильная адаптация ── */
+/* Уменьшаем паддинги форм входа на маленьких экранах */
+@media (max-width: 480px) {
+  .login-form-card {
+    padding: 20px 16px 18px !important;
+    border-radius: 14px !important;
+  }
+  .login-code-input {
+    width: 40px !important;
+    height: 46px !important;
+    font-size: 18px !important;
+  }
+}
 * {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;

@@ -222,16 +222,16 @@ const FORM_CARD: React.CSSProperties = {
   border: "2px solid rgba(255,120,20,0.7)",
   borderRadius: 18,
   boxShadow: [
-    "0 0 0 1px rgba(255,80,0,0.3)",          // внутренний обвод
-    "0 0 30px rgba(255,100,0,0.5)",           // ближнее свечение
-    "0 0 70px rgba(255,60,0,0.25)",           // дальнее свечение
-    "0 20px 50px rgba(0,0,0,0.8)",            // тень вниз
-    "inset 0 1px 0 rgba(255,180,60,0.25)",   // блик сверху
+    "0 0 0 1px rgba(255,80,0,0.3)",
+    "0 0 30px rgba(255,100,0,0.5)",
+    "0 0 70px rgba(255,60,0,0.25)",
+    "0 20px 50px rgba(0,0,0,0.8)",
+    "inset 0 1px 0 rgba(255,180,60,0.25)",
   ].join(", "),
-  // transform убран полностью — rotateX размывает дочерний текст
   padding: "28px 28px 24px",
   position: "relative" as const,
 };
+const FORM_CARD_CLS = "login-form-card";
 
 // Поля ввода — чёткий текст, яркая обводка
 const INPUT_STYLE: React.CSSProperties = {
@@ -457,7 +457,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
   }));
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden relative" style={{ background: "#000000", fontFamily: "'Space Grotesk', sans-serif", WebkitFontSmoothing: "antialiased", MozOsxFontSmoothing: "grayscale" }}>
+    <div className="flex h-screen w-screen overflow-hidden relative" style={{ background: "#000000", fontFamily: "'Space Grotesk', sans-serif", WebkitFontSmoothing: "antialiased", MozOsxFontSmoothing: "grayscale", height: "100dvh" }}>
 
       {/* ── ЗВЁЗДНОЕ НЕБО ── */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -560,11 +560,12 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
       </div>
 
       {/* ── ПРАВАЯ ЧАСТЬ — форма ── */}
-      <div className="flex-1 flex items-center justify-center px-6 overflow-y-auto py-8 z-10 relative">
+      <div className="flex-1 flex items-center justify-center px-4 overflow-y-auto z-10 relative"
+        style={{ paddingTop: "max(24px, env(safe-area-inset-top))", paddingBottom: "max(24px, env(safe-area-inset-bottom))" }}>
         <div className="w-full max-w-[400px]">
 
           {/* Мобильное лого */}
-          <div className="lg:hidden flex items-center gap-3 mb-8">
+          <div className="lg:hidden flex items-center gap-3 mb-5">
             <div style={{ width:42, height:42, borderRadius:12, background:"linear-gradient(145deg,#1a0a00,#2d1200)", border:"1px solid rgba(255,120,30,0.5)", boxShadow:"0 0 16px rgba(255,80,0,0.4)", display:"flex", alignItems:"center", justifyContent:"center" }}>
               <span style={{ fontFamily:"'Orbitron',sans-serif", fontSize:18, fontWeight:900, color:"#ff8c00", WebkitFontSmoothing:"antialiased" }}>Д</span>
             </div>
@@ -574,7 +575,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
           {/* STEP: LOGIN */}
           {step === "login" && (
             <div style={{ animation: "fadeSlideIn 0.4s cubic-bezier(0.22,1,0.36,1)" }}>
-              <div style={FORM_CARD}>
+              <div style={FORM_CARD} className={FORM_CARD_CLS}>
                 <div style={{ position:"absolute", inset:0, borderRadius:20, background:"linear-gradient(135deg, rgba(255,120,30,0.08) 0%, transparent 50%)", pointerEvents:"none" }} />
                 <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:22, fontWeight:900, letterSpacing:"0.04em", color:"#ff9000", textShadow:"0 0 20px rgba(255,140,0,0.4), 0 1px 0 rgba(120,60,0,0.5)", marginBottom:4, WebkitFontSmoothing:"antialiased" }}>ВХОД</h2>
                 <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,180,80,0.75)", marginBottom:24, letterSpacing:"0.03em", WebkitFontSmoothing:"antialiased" }}>Введите никнейм и пароль</p>
@@ -619,7 +620,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
               <button onClick={() => { setStep("login"); clearErr(); }} className="flex items-center gap-1.5 mb-5 transition-colors" style={{ fontFamily:"'Rajdhani',sans-serif", fontSize:13, color:"rgba(255,120,40,0.6)", background:"none", border:"none", cursor:"pointer", letterSpacing:"0.05em" }}>
                 <Icon name="ArrowLeft" size={13} /> НАЗАД
               </button>
-              <div style={FORM_CARD}>
+              <div style={FORM_CARD} className={FORM_CARD_CLS}>
                 <div style={{ position:"absolute", inset:0, borderRadius:20, background:"linear-gradient(135deg, rgba(255,120,30,0.08) 0%, transparent 50%)", pointerEvents:"none" }} />
                 <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:22, fontWeight:900, letterSpacing:"0.04em", color:"#ff9000", textShadow:"0 0 20px rgba(255,140,0,0.4), 0 1px 0 rgba(120,60,0,0.5)", marginBottom:4, WebkitFontSmoothing:"antialiased" }}>EMAIL</h2>
                 <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,180,80,0.75)", marginBottom:24, WebkitFontSmoothing:"antialiased" }}>Введите email — пришлём код</p>
@@ -648,7 +649,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
               <button onClick={() => { setStep("forgot"); setCode(["","","","","",""]); clearErr(); }} className="flex items-center gap-1.5 mb-5" style={{ fontFamily:"'Rajdhani',sans-serif", fontSize:13, color:"rgba(255,120,40,0.6)", background:"none", border:"none", cursor:"pointer", letterSpacing:"0.05em" }}>
                 <Icon name="ArrowLeft" size={13} /> НАЗАД
               </button>
-              <div style={FORM_CARD}>
+              <div style={FORM_CARD} className={FORM_CARD_CLS}>
                 <div style={{ position:"absolute", inset:0, borderRadius:20, background:"linear-gradient(135deg, rgba(255,120,30,0.08) 0%, transparent 50%)", pointerEvents:"none" }} />
                 <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:22, fontWeight:900, letterSpacing:"0.04em", color:"#ff9000", textShadow:"0 0 20px rgba(255,140,0,0.4), 0 1px 0 rgba(120,60,0,0.5)", marginBottom:4, WebkitFontSmoothing:"antialiased" }}>КОД</h2>
                 <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,180,80,0.75)", marginBottom:24, WebkitFontSmoothing:"antialiased" }}>6-значный код на <span style={{ color:"#ffcc00", fontWeight:600 }}>{email}</span></p>
@@ -659,7 +660,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
                       onChange={e => handleCodeChange(idx, e.target.value, codeRefs)}
                       onKeyDown={e => handleCodeKey(idx, e, codeRefs)}
                       onFocus={e => e.target.select()}
-                      className={`w-11 h-12 text-center text-xl font-mono font-semibold rounded-xl focus:outline-none transition-all ${loading ? "opacity-50" : ""}`}
+                      className={`login-code-input w-11 h-12 text-center text-xl font-mono font-semibold rounded-xl focus:outline-none transition-all ${loading ? "opacity-50" : ""}`}
                       style={{ fontFamily:"'Orbitron',sans-serif", background: digit ? "rgba(255,120,0,0.2)" : "rgba(255,255,255,0.04)", border: digit ? "1px solid rgba(255,160,30,0.6)" : "1px solid rgba(255,100,20,0.2)", color: digit ? "#ffcc00" : "rgba(255,255,255,0.2)", boxShadow: digit ? "0 0 12px rgba(255,120,0,0.3), inset 0 2px 4px rgba(0,0,0,0.3)" : "inset 0 2px 4px rgba(0,0,0,0.3)" }}
                       autoFocus={idx === 0} />
                   ))}
@@ -681,7 +682,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
           {/* STEP: REGISTER */}
           {step === "register" && (
             <div style={{ animation: "fadeSlideIn 0.4s cubic-bezier(0.22,1,0.36,1)" }}>
-              <div style={FORM_CARD}>
+              <div style={FORM_CARD} className={FORM_CARD_CLS}>
                 <div style={{ position:"absolute", inset:0, borderRadius:20, background:"linear-gradient(135deg, rgba(255,120,30,0.08) 0%, transparent 50%)", pointerEvents:"none" }} />
                 <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:20, fontWeight:900, letterSpacing:"0.04em", color:"#ff9000", textShadow:"0 0 20px rgba(255,140,0,0.4), 0 1px 0 rgba(120,60,0,0.5)", marginBottom:4, WebkitFontSmoothing:"antialiased" }}>РЕГИСТРАЦИЯ</h2>
                 <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,180,80,0.75)", marginBottom:20, WebkitFontSmoothing:"antialiased" }}>Создайте аккаунт</p>
@@ -734,7 +735,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, token: string) => void
           {/* STEP: RESET PASSWORD */}
           {step === "reset_password" && (
             <div style={{ animation: "fadeSlideIn 0.4s cubic-bezier(0.22,1,0.36,1)" }}>
-              <div style={FORM_CARD}>
+              <div style={FORM_CARD} className={FORM_CARD_CLS}>
                 <div style={{ position:"absolute", inset:0, borderRadius:20, background:"linear-gradient(135deg, rgba(255,120,30,0.08) 0%, transparent 50%)", pointerEvents:"none" }} />
                 <h2 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:20, fontWeight:900, letterSpacing:"0.04em", color:"#ff9000", textShadow:"0 0 20px rgba(255,140,0,0.4), 0 1px 0 rgba(120,60,0,0.5)", marginBottom:4, WebkitFontSmoothing:"antialiased" }}>НОВЫЙ ПАРОЛЬ</h2>
                 <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:12, color:"rgba(255,180,80,0.75)", marginBottom:24, WebkitFontSmoothing:"antialiased" }}>Придумайте надёжный пароль</p>
@@ -1640,11 +1641,13 @@ function AppInner() {
   }
 
   if (pendingInvite) {
+    // Берём токен из state или напрямую из localStorage (если state ещё не обновился)
+    const joinToken = sessionToken || localStorage.getItem("session_token");
     return (
       <JoinPage
         code={pendingInvite}
         apiUrl={API.contacts}
-        sessionId={sessionToken}
+        sessionId={joinToken}
         onJoined={() => {
           sessionStorage.removeItem("pending_invite");
           window.history.replaceState({}, "", "/");
@@ -1664,7 +1667,7 @@ function AppInner() {
   }));
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden transition-colors duration-300 relative" style={{ fontFamily: FONT.body, background: T.bgDeep, color: T.text }}>
+    <div className="flex w-screen overflow-hidden transition-colors duration-300 relative" style={{ fontFamily: FONT.body, background: T.bgDeep, color: T.text, height: "100dvh" }}>
       <NotificationToast notifications={notifications} onDismiss={dismissNotifications} onGoToContacts={() => setSection("contacts")} />
 
       {/* ── Звёзды фона (только для тёмных тем) ── */}
