@@ -1,0 +1,7 @@
+{
+  "tests": [
+    {"name": "OPTIONS preflight", "method": "OPTIONS", "path": "/", "expectedStatus": 200},
+    {"name": "GET users — no session", "method": "GET", "path": "/?action=users", "expectedStatus": 403},
+    {"name": "POST ban — no session", "method": "POST", "path": "/?action=ban", "body": {"user_id": 1}, "expectedStatus": 403}
+  ]
+}

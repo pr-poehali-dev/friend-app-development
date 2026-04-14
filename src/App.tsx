@@ -79,6 +79,7 @@ const T = {
 };
 
 const API = {
+  admin: "https://functions.poehali.dev/20879e61-7da5-482b-9d05-9c34d4f7ae44",
   auth: "https://functions.poehali.dev/959bee44-9a42-4a9f-b352-21605b616456",
   chats: "https://functions.poehali.dev/871abe69-bab0-4421-9d49-eac8a87cbbab",
   messages: "https://functions.poehali.dev/3a4d8e8d-6ec2-41f4-8084-57c7800b94a3",
@@ -91,7 +92,7 @@ const API = {
   bots: "https://functions.poehali.dev/7f596567-baf9-40fb-adea-97045136e1f3",
 };
 
-type Section = "chats" | "contacts" | "calls" | "video" | "files" | "bots" | "settings" | "analytics";
+type Section = "chats" | "contacts" | "calls" | "video" | "files" | "bots" | "settings" | "analytics" | "admin";
 
 interface User {
   id: number;
@@ -1289,6 +1290,7 @@ function AppInner() {
     { id: "files" as Section, icon: "FolderOpen", label: t("nav_files") },
     { id: "bots" as Section, icon: "Bot", label: t("nav_bots") },
     ...(currentUser?.role === "admin" ? [{ id: "analytics" as Section, icon: "BarChart2", label: t("nav_analytics") }] : []),
+    ...(currentUser?.role === "admin" ? [{ id: "admin" as Section, icon: "Shield", label: "КАБИНЕТ" }] : []),
   ];
 
   const bottomNav = [
@@ -1345,6 +1347,24 @@ function AppInner() {
   const [sendingBotMsg, setSendingBotMsg] = useState(false);
   const [externalContacts, setExternalContacts] = useState<{id:number;display_name:string;phone?:string;email?:string;position?:string;department?:string;avatar_initials:string;online:boolean;source:string;linked_user_id?:number}[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [adminUsers, setAdminUsers] = useState<any[]>([]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminTab, setAdminTab] = useState<"users"|"bans"|"chat">("users");
+  const [adminSelectedUser, setAdminSelectedUser] = useState<any>(null);
+  const [adminUserDetail, setAdminUserDetail] = useState<{contacts:any[];chats:any[];files:any[]}|null>(null);
+  const [adminChatId, setAdminChatId] = useState<number|null>(null);
+  const [adminChatMessages, setAdminChatMessages] = useState<any[]>([]);
+  const [adminBans, setAdminBans] = useState<any[]>([]);
+  const [adminBroadcast, setAdminBroadcast] = useState("");
+  const [adminBanModal, setAdminBanModal] = useState<{user_id:number;name:string}|null>(null);
+  const [adminBanReason, setAdminBanReason] = useState("");
+  const [adminBanHours, setAdminBanHours] = useState("");
+  const [adminSendModal, setAdminSendModal] = useState<{chat_id?:number;name:string;all?:boolean}|null>(null);
+  const [adminSendText, setAdminSendText] = useState("");
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [newGroupMembers, setNewGroupMembers] = useState<number[]>([]);
+  const [allUsers, setAllUsers] = useState<{id:number;display_name:string;avatar_initials:string;avatar_url?:string;online:boolean}[]>([]);
   const inviteCode = new URLSearchParams(window.location.search).get("invite");
 
   // Check existing session
@@ -1608,6 +1628,72 @@ function AppInner() {
 
   useEffect(() => {
     if (section === "bots" && sessionToken) loadBots();
+  }, [section, sessionToken]);
+
+  const loadAdminUsers = useCallback(async () => {
+    if (!sessionToken || currentUser?.role !== "admin") return;
+    setAdminLoading(true);
+    try {
+      const res = await fetch(`${API.admin}?action=users`, { headers: authHeaders() });
+      const data = await res.json();
+      if (data.users) setAdminUsers(data.users);
+    } finally { setAdminLoading(false); }
+  }, [sessionToken, currentUser]);
+
+  const loadAdminUserDetail = async (uid: number) => {
+    const res = await fetch(`${API.admin}?action=user&id=${uid}`, { headers: authHeaders() });
+    const data = await res.json();
+    setAdminUserDetail(data);
+  };
+
+  const loadAdminChat = async (chatId: number) => {
+    setAdminChatId(chatId);
+    setAdminTab("chat");
+    const res = await fetch(`${API.admin}?action=chat&id=${chatId}`, { headers: authHeaders() });
+    const data = await res.json();
+    if (data.messages) setAdminChatMessages(data.messages);
+  };
+
+  const loadAdminBans = async () => {
+    const res = await fetch(`${API.admin}?action=bans`, { headers: authHeaders() });
+    const data = await res.json();
+    if (data.bans) setAdminBans(data.bans);
+  };
+
+  useEffect(() => {
+    if (section === "admin" && sessionToken && currentUser?.role === "admin") {
+      loadAdminUsers();
+      loadAdminBans();
+    }
+  }, [section, sessionToken, currentUser]);
+
+  const loadAllUsers = useCallback(async () => {
+    if (!sessionToken) return;
+    const res = await fetch(`${API.chats}/contacts`, { headers: authHeaders() });
+    const data = await res.json();
+    if (data.contacts) setAllUsers(data.contacts);
+  }, [sessionToken]);
+
+  const createGroupChat = async () => {
+    if (!newGroupName.trim() || newGroupMembers.length === 0) return;
+    try {
+      const res = await fetch(API.chats, {
+        method: "POST", headers: authHeaders(),
+        body: JSON.stringify({ type: "group", name: newGroupName.trim(), members: newGroupMembers }),
+      });
+      const data = await res.json();
+      if (data.chat_id) {
+        setShowCreateGroup(false);
+        setNewGroupName("");
+        setNewGroupMembers([]);
+        await loadChats();
+        setSection("chats");
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  useEffect(() => {
+    if (section === "chats" && sessionToken) loadAllUsers();
   }, [section, sessionToken]);
 
   const loadBotHistory = async (botId: number) => {
@@ -2105,7 +2191,16 @@ function AppInner() {
               <div className="px-4 pt-4 pb-3" style={{ borderBottom: "1px solid var(--t-border)", background: `linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))` }}>
                 <div className="flex items-center justify-between mb-3">
                   <h2 style={{ ...heading3d(12), letterSpacing: "0.12em" }}>{t("chats_title")}</h2>
-                  {loadingChats && <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--t-accent)", borderTopColor: "transparent" }} />}
+                  <div className="flex items-center gap-1">
+                    {loadingChats && <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--t-accent)", borderTopColor: "transparent" }} />}
+                    <button
+                      onClick={() => { loadAllUsers(); setShowCreateGroup(true); }}
+                      title="Создать группу"
+                      className="p-1.5 rounded transition-colors hover:bg-white/10"
+                      style={{ color: "var(--t-accent)" }}>
+                      <Icon name="Users" size={14} />
+                    </button>
+                  </div>
                 </div>
                 <div className="relative">
                   <Icon name="Search" size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={liveIcon(0)} />
@@ -2998,7 +3093,455 @@ function AppInner() {
             </div>
           </div>
         )}
+
+        {/* ADMIN PANEL */}
+        {section === "admin" && currentUser?.role === "admin" && (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="px-6 pt-5 pb-4 border-b flex items-center justify-between flex-shrink-0"
+              style={{ borderColor: "var(--t-border)", background: "linear-gradient(180deg, color-mix(in srgb, #ef4444 8%, var(--t-bg-main)), var(--t-bg-main))" }}>
+              <div>
+                <h2 style={{ ...heading3d(13), letterSpacing: "0.12em", color: "#ef4444" }}>⚙ ПАНЕЛЬ АДМИНИСТРАТОРА</h2>
+                <p className="text-xs mt-0.5" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>
+                  Управление пользователями · {adminUsers.length} зарегистрировано
+                </p>
+              </div>
+              <div className="flex gap-2">
+                {(["users","bans","chat"] as const).map(tab => (
+                  <button key={tab} onClick={() => setAdminTab(tab)}
+                    className="px-3 py-1.5 text-[10px] rounded uppercase tracking-widest transition-all"
+                    style={{
+                      fontFamily: FONT.mono,
+                      background: adminTab === tab ? "#ef4444" : "transparent",
+                      color: adminTab === tab ? "#fff" : "var(--t-text-dim)",
+                      border: `1px solid ${adminTab === tab ? "#ef4444" : "var(--t-border)"}`,
+                    }}>
+                    {tab === "users" ? "ПОЛЬЗОВАТЕЛИ" : tab === "bans" ? "БЛОКИРОВКИ" : "ПЕРЕПИСКА"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-1 overflow-hidden">
+              {/* Users Tab */}
+              {adminTab === "users" && (
+                <div className="flex flex-1 overflow-hidden">
+                  {/* Users List */}
+                  <div style={{ width: adminSelectedUser ? (isMobile ? "0" : 340) : "100%", flexShrink: 0, overflowY: "auto", borderRight: "1px solid var(--t-border)" }}>
+                    {/* Broadcast bar */}
+                    <div className="px-4 py-3 border-b flex gap-2" style={{ borderColor: "var(--t-border)", background: "color-mix(in srgb, #ef4444 4%, var(--t-bg-main))" }}>
+                      <input value={adminBroadcast} onChange={e => setAdminBroadcast(e.target.value)}
+                        placeholder="Сообщение всем пользователям..."
+                        className="flex-1 bg-transparent focus:outline-none text-xs px-3 py-2 rounded"
+                        style={{ border: "1px solid var(--t-border)", color: "var(--t-text)", fontFamily: FONT.body, fontSize: 12 }} />
+                      <button
+                        disabled={!adminBroadcast.trim()}
+                        onClick={() => { setAdminSendModal({ name: "Всем пользователям", all: true }); setAdminSendText(adminBroadcast); }}
+                        className="btn-3d px-3 py-2 text-[10px] flex items-center gap-1 disabled:opacity-40"
+                        style={{ ...btn3d("#ef4444"), background: "#ef4444" }}>
+                        <Icon name="Send" size={11} /> ВСЕМ
+                      </button>
+                    </div>
+
+                    {adminLoading ? (
+                      <div className="flex items-center justify-center py-10">
+                        <div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "#ef4444", borderTopColor: "transparent" }} />
+                      </div>
+                    ) : adminUsers.map(u => (
+                      <div key={u.id}
+                        onClick={() => { setAdminSelectedUser(u); loadAdminUserDetail(u.id); }}
+                        className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors"
+                        style={{
+                          borderBottom: "1px solid var(--t-bg-panel)",
+                          background: adminSelectedUser?.id === u.id ? "color-mix(in srgb, #ef4444 8%, transparent)" : undefined,
+                          opacity: u.is_banned ? 0.5 : 1,
+                        }}>
+                        <div style={{ position: "relative" }}>
+                          <AvatarBadge initials={u.avatar_initials} size="sm" online={u.online} avatar_url={u.avatar_url} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-medium truncate" style={{ fontFamily: FONT.heading, fontWeight: 700, color: "var(--t-text)" }}>{u.display_name}</span>
+                            {u.role === "admin" && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: "#ef4444", color: "#fff", fontFamily: FONT.mono }}>ADM</span>}
+                            {u.is_banned && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: "#6b7280", color: "#fff", fontFamily: FONT.mono }}>БАН</span>}
+                          </div>
+                          <div className="text-[10px]" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>
+                            @{u.username} · {u.msg_count} сообщ · {u.chat_count} чатов
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-[9px]" style={{ fontFamily: FONT.mono, color: u.online ? "#22c55e" : "var(--t-text-dim)" }}>
+                            {u.online ? "online" : u.last_seen ? new Date(u.last_seen).toLocaleDateString("ru") : "—"}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* User Detail Panel */}
+                  {adminSelectedUser && !isMobile && (
+                    <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
+                      {/* User header */}
+                      <div className="flex items-center gap-3 pb-4 border-b" style={{ borderColor: "var(--t-border)" }}>
+                        <AvatarBadge initials={adminSelectedUser.avatar_initials} size="lg" online={adminSelectedUser.online} avatar_url={adminSelectedUser.avatar_url} />
+                        <div className="flex-1">
+                          <div style={{ fontFamily: FONT.heading, fontWeight: 700, fontSize: 15, color: "var(--t-text)" }}>{adminSelectedUser.display_name}</div>
+                          <div style={{ fontFamily: FONT.body, fontSize: 11, color: "var(--t-text-dim)" }}>@{adminSelectedUser.username} · {adminSelectedUser.email || "—"}</div>
+                          <div style={{ fontFamily: FONT.body, fontSize: 11, color: "var(--t-text-dim)" }}>{adminSelectedUser.position || ""} {adminSelectedUser.department ? `· ${adminSelectedUser.department}` : ""}</div>
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <button onClick={() => { setAdminSendModal({ chat_id: undefined, name: adminSelectedUser.display_name }); setAdminSendText(""); }}
+                            className="px-3 py-1.5 text-[10px] rounded flex items-center gap-1"
+                            style={{ background: "var(--t-accent)", color: "#fff", fontFamily: FONT.mono, border: "none" }}>
+                            <Icon name="Send" size={11} /> НАПИСАТЬ
+                          </button>
+                          {!adminSelectedUser.is_banned ? (
+                            <button onClick={() => { setAdminBanModal({ user_id: adminSelectedUser.id, name: adminSelectedUser.display_name }); setAdminBanReason(""); setAdminBanHours(""); }}
+                              className="px-3 py-1.5 text-[10px] rounded flex items-center gap-1"
+                              style={{ background: "#ef4444", color: "#fff", fontFamily: FONT.mono, border: "none" }}>
+                              <Icon name="Ban" size={11} /> ЗАБЛОКИРОВАТЬ
+                            </button>
+                          ) : (
+                            <button onClick={async () => {
+                                await fetch(`${API.admin}?action=unban`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ user_id: adminSelectedUser.id }) });
+                                loadAdminUsers();
+                                setAdminSelectedUser((prev: any) => prev ? { ...prev, is_banned: false } : null);
+                              }}
+                              className="px-3 py-1.5 text-[10px] rounded flex items-center gap-1"
+                              style={{ background: "#22c55e", color: "#fff", fontFamily: FONT.mono, border: "none" }}>
+                              <Icon name="CheckCircle" size={11} /> РАЗБЛОКИРОВАТЬ
+                            </button>
+                          )}
+                          <button onClick={async () => {
+                              const newRole = adminSelectedUser.role === "admin" ? "user" : "admin";
+                              await fetch(`${API.admin}?action=set_role`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ user_id: adminSelectedUser.id, role: newRole }) });
+                              loadAdminUsers();
+                              setAdminSelectedUser((prev: any) => prev ? { ...prev, role: newRole } : null);
+                            }}
+                            className="px-3 py-1.5 text-[10px] rounded flex items-center gap-1"
+                            style={{ background: adminSelectedUser.role === "admin" ? "#6b7280" : "#8b5cf6", color: "#fff", fontFamily: FONT.mono, border: "none" }}>
+                            <Icon name="Shield" size={11} /> {adminSelectedUser.role === "admin" ? "СНЯТЬ ADMIN" : "НАЗНАЧИТЬ ADMIN"}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Stats */}
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { label: "СООБЩЕНИЙ", value: adminSelectedUser.msg_count },
+                          { label: "ЧАТОВ", value: adminSelectedUser.chat_count },
+                          { label: "СЕССИЙ", value: adminSelectedUser.session_count },
+                        ].map(s => (
+                          <div key={s.label} className="p-3 rounded-lg text-center" style={{ background: "var(--t-bg-panel)", border: "1px solid var(--t-border)" }}>
+                            <div style={{ fontFamily: FONT.mono, fontSize: 20, fontWeight: 700, color: "var(--t-text)" }}>{s.value}</div>
+                            <div style={{ fontFamily: FONT.mono, fontSize: 9, color: "var(--t-text-dim)", letterSpacing: "0.1em" }}>{s.label}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Contacts */}
+                      {adminUserDetail && (
+                        <>
+                          <div>
+                            <div className="text-[10px] uppercase tracking-widest mb-2" style={{ fontFamily: FONT.mono, color: "var(--t-text-dim)" }}>КОНТАКТЫ ({adminUserDetail.contacts.length})</div>
+                            <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
+                              {adminUserDetail.contacts.map((c, i) => (
+                                <div key={i} className="flex items-center gap-2 text-xs py-1" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>
+                                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: c.online ? "#22c55e" : "var(--t-border)" }} />
+                                  {c.name} {c.phone ? `· ${c.phone}` : ""} {c.email ? `· ${c.email}` : ""}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Chats */}
+                          <div>
+                            <div className="text-[10px] uppercase tracking-widest mb-2" style={{ fontFamily: FONT.mono, color: "var(--t-text-dim)" }}>ЧАТЫ И ПЕРЕПИСКИ ({adminUserDetail.chats.length})</div>
+                            <div className="flex flex-col gap-1">
+                              {adminUserDetail.chats.map(c => (
+                                <div key={c.id} className="flex items-center gap-2 py-1.5 px-2 rounded cursor-pointer hover:bg-white/5"
+                                  onClick={() => loadAdminChat(c.id)}>
+                                  <Icon name={c.type === "group" ? "Users" : "MessageSquare"} size={12} style={{ color: "var(--t-accent)" }} />
+                                  <span className="text-xs flex-1" style={{ fontFamily: FONT.body, color: "var(--t-text)" }}>{c.name}</span>
+                                  <span className="text-[10px]" style={{ fontFamily: FONT.mono, color: "var(--t-text-dim)" }}>{c.sent} сообщ</span>
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "color-mix(in srgb, #ef4444 15%, transparent)", color: "#ef4444", fontFamily: FONT.mono }}>
+                                    ЧИТАТЬ →
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Files */}
+                          {adminUserDetail.files.length > 0 && (
+                            <div>
+                              <div className="text-[10px] uppercase tracking-widest mb-2" style={{ fontFamily: FONT.mono, color: "var(--t-text-dim)" }}>ФАЙЛЫ ({adminUserDetail.files.length})</div>
+                              <div className="flex flex-col gap-1">
+                                {adminUserDetail.files.map((f, i) => (
+                                  <div key={i} className="flex items-center gap-2 text-xs py-1">
+                                    <Icon name="File" size={12} style={{ color: "var(--t-accent)" }} />
+                                    <a href={f.url} target="_blank" rel="noopener noreferrer"
+                                      className="flex-1 truncate hover:underline"
+                                      style={{ fontFamily: FONT.body, color: "var(--t-text)" }}>{f.name}</a>
+                                    <span style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)" }}>{f.size} · {f.date}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Bans Tab */}
+              {adminTab === "bans" && (
+                <div className="flex-1 overflow-y-auto px-5 py-4">
+                  <div style={{ ...card3d() }}>
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b" style={{ borderColor: "var(--t-border)" }}>
+                          {["ПОЛЬЗОВАТЕЛЬ","ПРИЧИНА","ДО","КЕМ ЗАБЛОКИРОВАН",""].map(h => (
+                            <th key={h} className="text-left px-4 py-2.5" style={{ ...heading3d(9), letterSpacing: "0.1em" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {adminBans.map(b => (
+                          <tr key={b.id} style={{ borderBottom: "1px solid var(--t-bg-panel)" }}>
+                            <td className="px-4 py-3">
+                              <div style={{ fontFamily: FONT.heading, fontWeight: 700, fontSize: 12, color: "var(--t-text)" }}>{b.user_name}</div>
+                              <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)" }}>@{b.username}</div>
+                            </td>
+                            <td className="px-4 py-3 text-xs" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{b.reason || "—"}</td>
+                            <td className="px-4 py-3 text-xs font-mono" style={{ fontFamily: FONT.mono, color: "#ef4444" }}>{b.banned_until === "навсегда" ? "навсегда" : new Date(b.banned_until).toLocaleDateString("ru")}</td>
+                            <td className="px-4 py-3 text-xs" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{b.banned_by}</td>
+                            <td className="px-4 py-3">
+                              <button onClick={async () => {
+                                  await fetch(`${API.admin}?action=unban`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ user_id: b.user_id }) });
+                                  loadAdminBans(); loadAdminUsers();
+                                }}
+                                className="text-[10px] px-2 py-1 rounded"
+                                style={{ background: "#22c55e", color: "#fff", fontFamily: FONT.mono, border: "none" }}>
+                                СНЯТЬ
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {adminBans.length === 0 && (
+                          <tr><td colSpan={5} className="px-4 py-8 text-center text-xs" style={{ color: "var(--t-text-dim)", fontFamily: FONT.body }}>Нет активных блокировок</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Chat View Tab */}
+              {adminTab === "chat" && (
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  {adminChatId ? (
+                    <>
+                      <div className="px-4 py-3 border-b flex items-center gap-2 flex-shrink-0" style={{ borderColor: "var(--t-border)", background: "color-mix(in srgb, #ef4444 4%, var(--t-bg-main))" }}>
+                        <button onClick={() => setAdminTab("users")} style={{ color: "var(--t-text-dim)" }}><Icon name="ChevronLeft" size={16} /></button>
+                        <Icon name="Eye" size={14} style={{ color: "#ef4444" }} />
+                        <span style={{ fontFamily: FONT.mono, fontSize: 11, color: "#ef4444", letterSpacing: "0.1em" }}>
+                          ПРОСМОТР ПЕРЕПИСКИ · ЧАТ #{adminChatId}
+                        </span>
+                      </div>
+                      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+                        {adminChatMessages.map(msg => (
+                          <div key={msg.id} className="flex items-start gap-2">
+                            <div style={{
+                              width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                              background: "var(--t-bg-panel)", border: "1px solid var(--t-border)",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              fontFamily: FONT.mono, fontSize: 9, fontWeight: 700, color: "var(--t-accent)",
+                            }}>
+                              {msg.avatar}
+                            </div>
+                            <div>
+                              <div className="flex items-baseline gap-2 mb-0.5">
+                                <span style={{ fontFamily: FONT.heading, fontWeight: 700, fontSize: 11, color: "var(--t-text)" }}>{msg.sender}</span>
+                                <span style={{ fontFamily: FONT.mono, fontSize: 9, color: "var(--t-text-dim)" }}>{msg.time}</span>
+                              </div>
+                              {msg.type === "file" ? (
+                                <a href={msg.file_url} target="_blank" rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 text-xs hover:underline"
+                                  style={{ color: "var(--t-accent)", fontFamily: FONT.body }}>
+                                  <Icon name="Paperclip" size={11} /> {msg.file_name}
+                                </a>
+                              ) : (
+                                <div className="text-xs leading-relaxed" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)", maxWidth: 500 }}>{msg.text}</div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        {adminChatMessages.length === 0 && (
+                          <div className="flex items-center justify-center py-10 text-xs" style={{ color: "var(--t-text-dim)", fontFamily: FONT.body }}>
+                            Нет сообщений
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center gap-2">
+                      <Icon name="MessageSquare" size={32} style={{ color: "var(--t-text-dim)" }} />
+                      <span style={{ fontFamily: FONT.body, fontSize: 12, color: "var(--t-text-dim)" }}>Выберите чат пользователя для просмотра</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Ban Modal */}
+            {adminBanModal && (
+              <div className="fixed inset-0 z-[60] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }}>
+                <div className="w-80 mx-4 rounded-xl overflow-hidden" style={{ background: "var(--t-bg-panel)", border: "1px solid #ef4444" }}>
+                  <div className="px-5 py-4 border-b" style={{ borderColor: "#ef4444", background: "color-mix(in srgb, #ef4444 10%, var(--t-bg-panel))" }}>
+                    <span style={{ fontFamily: FONT.mono, fontSize: 12, fontWeight: 700, color: "#ef4444", letterSpacing: "0.1em" }}>БЛОКИРОВКА: {adminBanModal.name}</span>
+                  </div>
+                  <div className="px-5 py-4 flex flex-col gap-3">
+                    <div>
+                      <div className="text-[10px] uppercase mb-1" style={{ fontFamily: FONT.mono, color: "var(--t-text-dim)" }}>ПРИЧИНА</div>
+                      <input value={adminBanReason} onChange={e => setAdminBanReason(e.target.value)}
+                        placeholder="Нарушение правил..."
+                        className="w-full bg-transparent focus:outline-none text-sm px-3 py-2 rounded"
+                        style={{ border: "1px solid var(--t-border)", color: "var(--t-text)", fontFamily: FONT.body, fontSize: 12 }} />
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase mb-1" style={{ fontFamily: FONT.mono, color: "var(--t-text-dim)" }}>СРОК (часов, пусто = навсегда)</div>
+                      <input value={adminBanHours} onChange={e => setAdminBanHours(e.target.value)} type="number" min="1"
+                        placeholder="Например: 24 или 168"
+                        className="w-full bg-transparent focus:outline-none text-sm px-3 py-2 rounded"
+                        style={{ border: "1px solid var(--t-border)", color: "var(--t-text)", fontFamily: FONT.body, fontSize: 12 }} />
+                    </div>
+                  </div>
+                  <div className="px-5 py-4 border-t flex gap-2 justify-end" style={{ borderColor: "var(--t-border)" }}>
+                    <button onClick={() => setAdminBanModal(null)}
+                      className="px-4 py-2 text-xs rounded"
+                      style={{ fontFamily: FONT.mono, color: "var(--t-text-dim)", border: "1px solid var(--t-border)" }}>
+                      ОТМЕНА
+                    </button>
+                    <button onClick={async () => {
+                        await fetch(`${API.admin}?action=ban`, {
+                          method: "POST", headers: authHeaders(),
+                          body: JSON.stringify({ user_id: adminBanModal.user_id, reason: adminBanReason, hours: adminBanHours ? parseInt(adminBanHours) : null }),
+                        });
+                        setAdminBanModal(null);
+                        loadAdminUsers();
+                        loadAdminBans();
+                      }}
+                      className="px-4 py-2 text-xs rounded flex items-center gap-1"
+                      style={{ background: "#ef4444", color: "#fff", fontFamily: FONT.mono, border: "none" }}>
+                      <Icon name="Ban" size={11} /> ЗАБЛОКИРОВАТЬ
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Send Message Modal */}
+            {adminSendModal && (
+              <div className="fixed inset-0 z-[60] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }}>
+                <div className="w-96 mx-4 rounded-xl overflow-hidden" style={{ background: "var(--t-bg-panel)", border: "1px solid var(--t-border)" }}>
+                  <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "var(--t-border)" }}>
+                    <span style={{ fontFamily: FONT.mono, fontSize: 12, fontWeight: 700, color: "var(--t-text)", letterSpacing: "0.1em" }}>
+                      СООБЩЕНИЕ → {adminSendModal.name}
+                    </span>
+                    <button onClick={() => setAdminSendModal(null)} style={{ color: "var(--t-text-dim)" }}><Icon name="X" size={14} /></button>
+                  </div>
+                  <div className="px-5 py-4">
+                    <textarea value={adminSendText} onChange={e => setAdminSendText(e.target.value)}
+                      placeholder="Текст сообщения..."
+                      rows={4}
+                      className="w-full bg-transparent focus:outline-none text-sm px-3 py-2 rounded resize-none"
+                      style={{ border: "1px solid var(--t-border)", color: "var(--t-text)", fontFamily: FONT.body, fontSize: 13 }} />
+                  </div>
+                  <div className="px-5 py-4 border-t flex gap-2 justify-end" style={{ borderColor: "var(--t-border)" }}>
+                    <button onClick={() => setAdminSendModal(null)}
+                      className="px-4 py-2 text-xs rounded"
+                      style={{ fontFamily: FONT.mono, color: "var(--t-text-dim)", border: "1px solid var(--t-border)" }}>
+                      ОТМЕНА
+                    </button>
+                    <button onClick={async () => {
+                        const payload: Record<string, unknown> = { text: adminSendText };
+                        if (adminSendModal.all) payload.all = true;
+                        else {
+                          // Найти или создать чат с пользователем
+                          const chRes = await fetch(API.chats, { method: "POST", headers: authHeaders(), body: JSON.stringify({ user_id: adminSelectedUser?.id }) });
+                          const chData = await chRes.json();
+                          payload.chat_id = chData.chat_id;
+                        }
+                        await fetch(`${API.admin}?action=send`, { method: "POST", headers: authHeaders(), body: JSON.stringify(payload) });
+                        setAdminSendModal(null);
+                        setAdminBroadcast("");
+                        setAdminSendText("");
+                      }}
+                      disabled={!adminSendText.trim()}
+                      className="btn-3d px-4 py-2 text-xs flex items-center gap-1.5 disabled:opacity-50"
+                      style={{ ...btn3d("var(--t-accent)") }}>
+                      <Icon name="Send" size={11} /> ОТПРАВИТЬ
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Create Group Modal */}
+      {showCreateGroup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }}>
+          <div className="w-full max-w-md mx-4 rounded-xl overflow-hidden" style={{ background: "var(--t-bg-panel)", border: "1px solid var(--t-border)", boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}>
+            <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "var(--t-border)" }}>
+              <span style={{ ...heading3d(12), letterSpacing: "0.1em" }}>НОВАЯ ГРУППА</span>
+              <button onClick={() => setShowCreateGroup(false)} style={{ color: "var(--t-text-dim)" }}><Icon name="X" size={16} /></button>
+            </div>
+            <div className="px-5 py-4 flex flex-col gap-4">
+              <div>
+                <div className="text-[10px] mb-1 uppercase tracking-widest" style={{ color: "var(--t-text-dim)", fontFamily: FONT.mono }}>НАЗВАНИЕ ГРУППЫ</div>
+                <input value={newGroupName} onChange={e => setNewGroupName(e.target.value)}
+                  placeholder="Например: Отдел продаж"
+                  className="w-full bg-transparent focus:outline-none text-sm px-3 py-2 rounded"
+                  style={{ border: "1px solid var(--t-border)", color: "var(--t-text)", fontFamily: FONT.body, fontSize: 13 }} />
+              </div>
+              <div>
+                <div className="text-[10px] mb-2 uppercase tracking-widest" style={{ color: "var(--t-text-dim)", fontFamily: FONT.mono }}>
+                  УЧАСТНИКИ ({newGroupMembers.length} выбрано)
+                </div>
+                <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+                  {allUsers.map(u => (
+                    <label key={u.id} className="flex items-center gap-2 cursor-pointer py-1.5 px-2 rounded hover:bg-white/5">
+                      <input type="checkbox" checked={newGroupMembers.includes(u.id)}
+                        onChange={e => setNewGroupMembers(prev => e.target.checked ? [...prev, u.id] : prev.filter(x => x !== u.id))}
+                        className="accent-[var(--t-accent)]" />
+                      <AvatarBadge initials={u.avatar_initials} size="sm" online={u.online} avatar_url={u.avatar_url} />
+                      <span style={{ fontFamily: FONT.body, fontSize: 12, color: "var(--t-text)" }}>{u.display_name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t flex gap-2 justify-end" style={{ borderColor: "var(--t-border)" }}>
+              <button onClick={() => setShowCreateGroup(false)}
+                className="px-4 py-2 text-xs rounded"
+                style={{ fontFamily: FONT.mono, color: "var(--t-text-dim)", border: "1px solid var(--t-border)" }}>
+                ОТМЕНА
+              </button>
+              <button onClick={createGroupChat}
+                disabled={!newGroupName.trim() || newGroupMembers.length === 0}
+                className="btn-3d px-4 py-2 text-xs flex items-center gap-1.5 disabled:opacity-50"
+                style={{ ...btn3d("var(--t-accent)") }}>
+                <Icon name="Users" size={12} /> СОЗДАТЬ ГРУППУ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Incoming Call */}
       {incomingCall && !activeCall && (

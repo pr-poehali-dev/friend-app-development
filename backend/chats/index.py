@@ -1,8 +1,10 @@
 """
 API чатов мессенджера Друг.
-GET / — список чатов текущего пользователя
-POST / — создать личный чат с пользователем
-GET /contacts — список всех пользователей
+GET /           — список чатов текущего пользователя
+POST /          — создать личный чат (body: {user_id}) или группу (body: {type:"group", name, members:[ids]})
+GET /contacts   — список всех пользователей (для выбора участников)
+GET /members    — участники группового чата (?chat_id=X)
+POST /leave     — покинуть групповой чат
 """
 import json
 import os
@@ -52,17 +54,35 @@ def handler(event: dict, context) -> dict:
         # GET /contacts
         if method == "GET" and "contacts" in path:
             cur.execute(
-                """SELECT id, username, display_name, position, department, phone, avatar_initials, online
+                """SELECT id, username, display_name, position, department, phone,
+                          avatar_initials, online, avatar_url
                    FROM users WHERE id != %s ORDER BY display_name""",
                 (user_id,)
             )
             rows = cur.fetchall()
             contacts = [
                 {"id": r[0], "username": r[1], "display_name": r[2], "position": r[3],
-                 "department": r[4], "phone": r[5], "avatar_initials": r[6], "online": r[7]}
+                 "department": r[4], "phone": r[5], "avatar_initials": r[6],
+                 "online": r[7], "avatar_url": r[8]}
                 for r in rows
             ]
             return {"statusCode": 200, "headers": CORS, "body": json.dumps({"contacts": contacts})}
+
+        # GET /members — участники группового чата
+        if method == "GET" and "members" in path:
+            params = event.get("queryStringParameters") or {}
+            chat_id = params.get("chat_id")
+            if not chat_id:
+                return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "chat_id required"})}
+            cur.execute(
+                """SELECT u.id, u.display_name, u.avatar_initials, u.online, u.avatar_url, u.position
+                   FROM chat_members cm JOIN users u ON u.id = cm.user_id
+                   WHERE cm.chat_id = %s ORDER BY u.display_name""",
+                (chat_id,)
+            )
+            members = [{"id": r[0], "display_name": r[1], "avatar_initials": r[2],
+                        "online": r[3], "avatar_url": r[4], "position": r[5]} for r in cur.fetchall()]
+            return {"statusCode": 200, "headers": CORS, "body": json.dumps({"members": members})}
 
         # GET / — список чатов
         if method == "GET":
@@ -125,14 +145,49 @@ def handler(event: dict, context) -> dict:
 
             return {"statusCode": 200, "headers": CORS, "body": json.dumps({"chats": chats})}
 
-        # POST / — создать или найти личный чат
+        # POST /leave — покинуть групповой чат
+        if method == "POST" and "leave" in path:
+            body = json.loads(event.get("body") or "{}")
+            chat_id = body.get("chat_id")
+            if not chat_id:
+                return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "chat_id required"})}
+            cur.execute(
+                "DELETE FROM chat_members WHERE chat_id = %s AND user_id = %s",
+                (chat_id, user_id)
+            )
+            conn.commit()
+            return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
+
+        # POST / — создать личный чат или группу
         if method == "POST":
             body = json.loads(event.get("body") or "{}")
+            chat_type = body.get("type", "personal")
+
+            # Создать групповой чат
+            if chat_type == "group":
+                name = (body.get("name") or "").strip()
+                member_ids = body.get("members", [])
+                if not name:
+                    return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "name required"})}
+                cur.execute("INSERT INTO chats (type, name) VALUES ('group', %s) RETURNING id", (name,))
+                chat_id = cur.fetchone()[0]
+                # Добавить создателя + участников
+                all_members = list(set([user_id] + [int(m) for m in member_ids]))
+                for mid in all_members:
+                    cur.execute("INSERT INTO chat_members (chat_id, user_id) VALUES (%s, %s)", (chat_id, mid))
+                # Системное сообщение
+                cur.execute(
+                    "INSERT INTO messages (chat_id, sender_id, text, msg_type) VALUES (%s, %s, %s, 'system')",
+                    (chat_id, user_id, f"Группа «{name}» создана")
+                )
+                conn.commit()
+                return {"statusCode": 200, "headers": CORS, "body": json.dumps({"chat_id": chat_id, "type": "group"})}
+
+            # Создать личный чат
             other_user_id = body.get("user_id")
             if not other_user_id:
                 return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "user_id required"})}
 
-            # Найти существующий личный чат между двумя пользователями
             cur.execute(
                 """SELECT c.id FROM chats c
                    JOIN chat_members cm1 ON cm1.chat_id = c.id AND cm1.user_id = %s
