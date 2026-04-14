@@ -2109,8 +2109,15 @@ function AppInner() {
         <JoinPage
           code={inviteCode}
           apiUrl={API.contacts}
+          authUrl={API.auth}
           sessionId={null}
-          onJoined={() => { window.history.replaceState({}, "", "/"); }}
+          onJoined={(token, user) => {
+            if (token && user) {
+              localStorage.setItem("session_token", token);
+              handleLogin(user as User, token);
+            }
+            window.history.replaceState({}, "", "/");
+          }}
           onLogin={() => {
             sessionStorage.setItem("pending_invite", inviteCode);
             window.history.replaceState({}, "", "/");
@@ -2122,12 +2129,12 @@ function AppInner() {
   }
 
   if (pendingInvite) {
-    // Берём токен из state или напрямую из localStorage (если state ещё не обновился)
     const joinToken = sessionToken || localStorage.getItem("session_token");
     return (
       <JoinPage
         code={pendingInvite}
         apiUrl={API.contacts}
+        authUrl={API.auth}
         sessionId={joinToken}
         onJoined={() => {
           sessionStorage.removeItem("pending_invite");

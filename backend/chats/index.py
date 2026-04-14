@@ -138,13 +138,14 @@ def handler(event: dict, context) -> dict:
                     words = (chat_name or "ГЧ").split()
                     avatar = "".join(w[0].upper() for w in words[:2])
 
-                # Непрочитанные
+                # Непрочитанные — сообщения от других после вступления в чат
                 cur.execute(
                     f"""SELECT COUNT(*) FROM {t('messages')}
                        WHERE chat_id = %s AND sender_id != %s
-                         AND created_at > COALESCE(
-                           (SELECT last_read_at FROM {t('chat_members')}
-                            WHERE chat_id = %s AND user_id = %s), '1970-01-01'
+                         AND created_at > (
+                           SELECT COALESCE(joined_at, '1970-01-01')
+                           FROM {t('chat_members')}
+                           WHERE chat_id = %s AND user_id = %s
                          )""",
                     (chat_id, user_id, chat_id, user_id)
                 )
