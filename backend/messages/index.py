@@ -1,8 +1,9 @@
 """
-API сообщений мессенджера Друг.
-GET  /?chat_id=X  — сообщения чата
-POST /            — отправить текстовое сообщение
-POST /upload      — загрузить файл в чат (base64)
+API сообщений мессенджера.
+GET  /?chat_id=X   — сообщения чата (с реакциями)
+POST /             — отправить текстовое сообщение
+POST /upload       — загрузить файл в чат (base64)
+POST /react        — поставить / убрать реакцию на сообщение
 """
 import json
 import os
@@ -49,7 +50,28 @@ def fmt_size(size_bytes: int) -> str:
     return f"{size_bytes / 1024 / 1024:.1f} МБ"
 
 
+def load_reactions(cur, message_ids: list, user_id: int) -> dict:
+    """Загрузить реакции для списка сообщений. Вернуть dict[msg_id] = [{"emoji","count","my"}]"""
+    if not message_ids:
+        return {}
+    ids_str = ",".join(str(i) for i in message_ids)
+    cur.execute(
+        f"""SELECT message_id, emoji, COUNT(*) as cnt,
+                   BOOL_OR(user_id = {user_id}) as my
+            FROM {t('message_reactions')}
+            WHERE message_id IN ({ids_str})
+            GROUP BY message_id, emoji
+            ORDER BY message_id, cnt DESC"""
+    )
+    result: dict = {}
+    for row in cur.fetchall():
+        mid, emoji, cnt, my = row
+        result.setdefault(mid, []).append({"emoji": emoji, "count": cnt, "my": my})
+    return result
+
+
 def handler(event: dict, context) -> dict:
+    """Сообщения и реакции чата."""
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS, "body": ""}
 
@@ -67,7 +89,7 @@ def handler(event: dict, context) -> dict:
 
         user_id, user_name, user_avatar = user[0], user[1], user[2]
 
-        # GET — получить сообщения
+        # ── GET — сообщения чата ──────────────────────────────────────────────
         if method == "GET":
             params = event.get("queryStringParameters") or {}
             chat_id = params.get("chat_id")
@@ -92,6 +114,9 @@ def handler(event: dict, context) -> dict:
                 (chat_id,)
             )
             rows = cur.fetchall()
+            msg_ids = [r[0] for r in rows]
+            reactions = load_reactions(cur, msg_ids, user_id)
+
             messages = [
                 {
                     "id": r[0],
@@ -106,13 +131,74 @@ def handler(event: dict, context) -> dict:
                     "sender_avatar": r[9],
                     "sender_avatar_url": r[10],
                     "own": r[7] == user_id,
+                    "reactions": reactions.get(r[0], []),
                 }
                 for r in rows
             ]
             return {"statusCode": 200, "headers": CORS, "body": json.dumps({"messages": messages})}
 
         if method == "POST":
-            # POST /upload — отправить файл
+
+            # ── POST /react — поставить / убрать реакцию ─────────────────────
+            if "react" in path:
+                body = json.loads(event.get("body") or "{}")
+                message_id = body.get("message_id")
+                emoji = (body.get("emoji") or "").strip()
+                if not message_id or not emoji:
+                    return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "message_id and emoji required"})}
+
+                # Проверить доступ: пользователь должен быть в чате этого сообщения
+                cur.execute(
+                    f"""SELECT m.chat_id FROM {t('messages')} m
+                        JOIN {t('chat_members')} cm ON cm.chat_id = m.chat_id
+                        WHERE m.id = %s AND cm.user_id = %s""",
+                    (message_id, user_id)
+                )
+                if not cur.fetchone():
+                    return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "forbidden"})}
+
+                # Toggle: если реакция уже есть — убрать, если нет — поставить
+                cur.execute(
+                    f"SELECT id FROM {t('message_reactions')} WHERE message_id=%s AND user_id=%s AND emoji=%s",
+                    (message_id, user_id, emoji)
+                )
+                existing = cur.fetchone()
+                if existing:
+                    cur.execute(
+                        f"UPDATE {t('message_reactions')} SET emoji=emoji WHERE id=%s RETURNING id",
+                        (existing[0],)
+                    )
+                    # Используем трюк — удаляем через INSERT с ON CONFLICT DO NOTHING нельзя DELETE,
+                    # поэтому просто отмечаем как "removed" через специальный emoji-флаг
+                    # Обойдём ограничение: обновим emoji на пустой маркер для фильтрации
+                    cur.execute(
+                        f"UPDATE {t('message_reactions')} SET emoji='__removed__' WHERE id=%s",
+                        (existing[0],)
+                    )
+                    action = "removed"
+                else:
+                    cur.execute(
+                        f"INSERT INTO {t('message_reactions')} (message_id, user_id, emoji) VALUES (%s,%s,%s)",
+                        (message_id, user_id, emoji)
+                    )
+                    action = "added"
+
+                conn.commit()
+
+                # Вернуть актуальные реакции на это сообщение
+                cur.execute(
+                    f"""SELECT emoji, COUNT(*) as cnt, BOOL_OR(user_id = {user_id}) as my
+                        FROM {t('message_reactions')}
+                        WHERE message_id = %s AND emoji != '__removed__'
+                        GROUP BY emoji ORDER BY cnt DESC""",
+                    (message_id,)
+                )
+                updated = [{"emoji": r[0], "count": r[1], "my": r[2]} for r in cur.fetchall()]
+                return {"statusCode": 200, "headers": CORS, "body": json.dumps({
+                    "action": action, "message_id": message_id, "reactions": updated
+                })}
+
+            # ── POST /upload — отправить файл ────────────────────────────────
             if "upload" in path:
                 body = json.loads(event.get("body") or "{}")
                 chat_id = body.get("chat_id")
@@ -153,21 +239,15 @@ def handler(event: dict, context) -> dict:
                 conn.commit()
 
                 message = {
-                    "id": row[0],
-                    "text": "",
-                    "type": "file",
-                    "file_name": file_name,
-                    "file_size": size_str,
-                    "file_url": file_url,
-                    "time": row[1].strftime("%H:%M"),
-                    "sender_id": user_id,
-                    "sender_name": user_name,
-                    "sender_avatar": user_avatar,
-                    "own": True,
+                    "id": row[0], "text": "", "type": "file",
+                    "file_name": file_name, "file_size": size_str, "file_url": file_url,
+                    "time": row[1].strftime("%H:%M"), "sender_id": user_id,
+                    "sender_name": user_name, "sender_avatar": user_avatar,
+                    "own": True, "reactions": [],
                 }
                 return {"statusCode": 200, "headers": CORS, "body": json.dumps({"message": message})}
 
-            # POST / — текстовое сообщение
+            # ── POST / — текстовое сообщение ──────────────────────────────────
             body = json.loads(event.get("body") or "{}")
             chat_id = body.get("chat_id")
             text = (body.get("text") or "").strip()
@@ -191,17 +271,11 @@ def handler(event: dict, context) -> dict:
             conn.commit()
 
             message = {
-                "id": row[0],
-                "text": text,
-                "type": "text",
-                "file_name": None,
-                "file_size": None,
-                "file_url": None,
-                "time": row[1].strftime("%H:%M"),
-                "sender_id": user_id,
-                "sender_name": user_name,
-                "sender_avatar": user_avatar,
-                "own": True,
+                "id": row[0], "text": text, "type": "text",
+                "file_name": None, "file_size": None, "file_url": None,
+                "time": row[1].strftime("%H:%M"), "sender_id": user_id,
+                "sender_name": user_name, "sender_avatar": user_avatar,
+                "own": True, "reactions": [],
             }
             return {"statusCode": 200, "headers": CORS, "body": json.dumps({"message": message})}
 

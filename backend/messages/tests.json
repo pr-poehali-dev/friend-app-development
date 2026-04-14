@@ -1,17 +1,32 @@
 {
   "tests": [
     {
-      "name": "Get messages without session",
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get messages — unauthorized",
       "method": "GET",
       "path": "/?chat_id=1",
       "expectedStatus": 401,
       "bodyMatcher": "partial"
     },
     {
-      "name": "Post message without session",
+      "name": "Post message — unauthorized",
       "method": "POST",
       "path": "/",
       "body": {"chat_id": 1, "text": "test"},
+      "expectedStatus": 401,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Post react — unauthorized",
+      "method": "POST",
+      "path": "/react",
+      "body": {"message_id": 1, "emoji": "👍"},
       "expectedStatus": 401,
       "bodyMatcher": "partial"
     }

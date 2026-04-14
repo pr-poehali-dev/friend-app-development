@@ -120,6 +120,12 @@ interface Chat {
   unread: number;
 }
 
+interface MsgReaction {
+  emoji: string;
+  count: number;
+  my: boolean;
+}
+
 interface Message {
   id: number;
   text: string;
@@ -132,6 +138,7 @@ interface Message {
   sender_name: string;
   sender_avatar: string;
   own: boolean;
+  reactions?: MsgReaction[];
 }
 
 interface CallRecord {
@@ -1485,6 +1492,22 @@ function AppInner() {
     return () => clearInterval(iv);
   }, [activeChat?.id, sessionToken]);
 
+  const handleReact = async (messageId: number, emoji: string) => {
+    try {
+      const res = await fetch(`${API.messages}/react`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ message_id: messageId, emoji }),
+      });
+      const data = await res.json();
+      if (data.reactions !== undefined) {
+        setMessages(prev => prev.map(m =>
+          m.id === messageId ? { ...m, reactions: data.reactions } : m
+        ));
+      }
+    } catch { /* silent */ }
+  };
+
   const handleSend = async () => {
     if (!msgInput.trim() || !activeChat || sendingMsg) return;
     const text = msgInput.trim();
@@ -2327,53 +2350,102 @@ function AppInner() {
                     )}
 
                     {messages.map((msg, mi) => (
-                      <div key={msg.id} className={`flex items-end gap-2 ${msg.own ? "flex-row-reverse" : ""}`}
-                        style={{ animation: `msgIn 0.25s ease ${mi * 0.03}s both` }}>
+                      <div key={msg.id} className={`flex items-end gap-2 ${msg.own ? "flex-row-reverse" : ""} msg-row`}
+                        style={{ animation: `msgIn 0.25s ease ${mi * 0.03}s both`, position: "relative" }}>
                         {!msg.own && <AvatarBadge initials={msg.sender_avatar || "??"} size="sm" avatar_url={(msg as { sender_avatar_url?: string }).sender_avatar_url} />}
                         <div className={`max-w-[68%] flex flex-col gap-1 ${msg.own ? "items-end" : "items-start"}`}>
                           {!msg.own && (
                             <span className="msg-sender ml-2" style={{ color: "var(--t-accent)" }}>{msg.sender_name}</span>
                           )}
-                          <div className="px-4 py-2.5" style={msg.own ? msgOwn() : msgOther()}>
-                            {msg.type === "file" ? (() => {
-                              const name = msg.file_name || "";
-                              const url = msg.file_url || "#";
-                              const isImage = /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(name);
-                              const isVideo = /\.(mp4|webm|mov|avi|mkv)$/i.test(name);
-                              const isAudio = /\.(mp3|ogg|wav|m4a|aac)$/i.test(name);
-                              if (isImage) return (
-                                <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
-                                  <img src={url} alt={name} style={{ maxWidth: 260, maxHeight: 200, borderRadius: 8, display: "block", objectFit: "cover" }} loading="lazy" />
-                                  <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)", marginTop: 4 }}>{msg.file_size}</div>
-                                </a>
-                              );
-                              if (isVideo) return (
-                                <div>
-                                  <video src={url} controls style={{ maxWidth: 260, maxHeight: 180, borderRadius: 8, display: "block" }} />
-                                  <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)", marginTop: 4 }}>{name} · {msg.file_size}</div>
-                                </div>
-                              );
-                              if (isAudio) return (
-                                <div>
-                                  <audio src={url} controls style={{ width: 220, marginBottom: 4 }} />
-                                  <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)" }}>{name} · {msg.file_size}</div>
-                                </div>
-                              );
-                              return (
-                                <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-                                  <div style={{ width: 36, height: 36, borderRadius: 8, background: `color-mix(in srgb, var(--t-accent) 15%, transparent)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                    <Icon name={/\.(zip|rar|7z|tar|gz)$/i.test(name) ? "Archive" : /\.(pdf)$/i.test(name) ? "FileText" : "File"} size={18} style={liveIcon()} />
+                          {/* Пузырь сообщения + кнопка реакции */}
+                          <div style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 4, flexDirection: msg.own ? "row-reverse" : "row" }}>
+                            <div className="px-4 py-2.5" style={msg.own ? msgOwn() : msgOther()}>
+                              {msg.type === "file" ? (() => {
+                                const name = msg.file_name || "";
+                                const url = msg.file_url || "#";
+                                const isImage = /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(name);
+                                const isVideo = /\.(mp4|webm|mov|avi|mkv)$/i.test(name);
+                                const isAudio = /\.(mp3|ogg|wav|m4a|aac)$/i.test(name);
+                                if (isImage) return (
+                                  <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
+                                    <img src={url} alt={name} style={{ maxWidth: 260, maxHeight: 200, borderRadius: 8, display: "block", objectFit: "cover" }} loading="lazy" />
+                                    <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)", marginTop: 4 }}>{msg.file_size}</div>
+                                  </a>
+                                );
+                                if (isVideo) return (
+                                  <div>
+                                    <video src={url} controls style={{ maxWidth: 260, maxHeight: 180, borderRadius: 8, display: "block" }} />
+                                    <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)", marginTop: 4 }}>{name} · {msg.file_size}</div>
                                   </div>
-                                  <div className="min-w-0">
-                                    <div className="msg-text font-medium truncate max-w-[180px]" style={{ color: "var(--t-text)" }}>{name}</div>
-                                    <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)" }}>{msg.file_size}</div>
+                                );
+                                if (isAudio) return (
+                                  <div>
+                                    <audio src={url} controls style={{ width: 220, marginBottom: 4 }} />
+                                    <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)" }}>{name} · {msg.file_size}</div>
                                   </div>
-                                </a>
-                              );
-                            })() : (
-                              <span className="msg-text">{msg.text}</span>
-                            )}
+                                );
+                                return (
+                                  <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                                    <div style={{ width: 36, height: 36, borderRadius: 8, background: `color-mix(in srgb, var(--t-accent) 15%, transparent)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                      <Icon name={/\.(zip|rar|7z|tar|gz)$/i.test(name) ? "Archive" : /\.(pdf)$/i.test(name) ? "FileText" : "File"} size={18} style={liveIcon()} />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="msg-text font-medium truncate max-w-[180px]" style={{ color: "var(--t-text)" }}>{name}</div>
+                                      <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)" }}>{msg.file_size}</div>
+                                    </div>
+                                  </a>
+                                );
+                              })() : (
+                                <span className="msg-text">{msg.text}</span>
+                              )}
+                            </div>
+                            {/* Быстрые реакции — появляются при наведении */}
+                            <div className="msg-react-bar" style={{
+                              display: "flex", gap: 2, opacity: 0, transition: "opacity 0.15s",
+                              pointerEvents: "none",
+                            }}>
+                              {["👍","❤️","😂","😮","😢","🔥"].map(e => (
+                                <button key={e} onClick={() => handleReact(msg.id, e)}
+                                  style={{
+                                    fontSize: 16, lineHeight: 1, background: "var(--t-bg-panel)",
+                                    border: "1px solid var(--t-border)", borderRadius: 8,
+                                    cursor: "pointer", padding: "3px 5px", transition: "transform 0.1s",
+                                  }}
+                                  onMouseEnter={e2 => (e2.currentTarget.style.transform = "scale(1.25)")}
+                                  onMouseLeave={e2 => (e2.currentTarget.style.transform = "scale(1)")}
+                                >
+                                  {e}
+                                </button>
+                              ))}
+                            </div>
                           </div>
+                          {/* Реакции под сообщением */}
+                          {(msg.reactions ?? []).filter(r => r.emoji !== "__removed__" && r.count > 0).length > 0 && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 2, paddingLeft: msg.own ? 0 : 4, paddingRight: msg.own ? 4 : 0 }}>
+                              {(msg.reactions ?? []).filter(r => r.emoji !== "__removed__" && r.count > 0).map(r => (
+                                <button key={r.emoji} onClick={() => handleReact(msg.id, r.emoji)}
+                                  style={{
+                                    display: "flex", alignItems: "center", gap: 3,
+                                    background: r.my
+                                      ? "color-mix(in srgb, var(--t-accent) 20%, transparent)"
+                                      : "color-mix(in srgb, var(--t-bg-panel) 80%, transparent)",
+                                    border: r.my
+                                      ? "1px solid color-mix(in srgb, var(--t-accent) 50%, transparent)"
+                                      : "1px solid var(--t-border)",
+                                    borderRadius: 12, padding: "2px 7px",
+                                    cursor: "pointer", fontSize: 13, lineHeight: 1.4,
+                                    transition: "transform 0.1s, background 0.15s",
+                                    fontFamily: FONT.mono,
+                                  }}
+                                  onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.1)")}
+                                  onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}
+                                >
+                                  <span>{r.emoji}</span>
+                                  <span style={{ fontSize: 11, color: r.my ? "var(--t-accent)" : "var(--t-text-dim)", fontWeight: r.my ? 700 : 400 }}>{r.count}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
                           <span className="msg-time mx-1">{msg.time}</span>
                         </div>
                       </div>

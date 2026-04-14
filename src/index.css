@@ -597,6 +597,15 @@ body[data-theme] label {
   text-transform: uppercase;
 }
 
+/* Реакции на сообщения — панель появляется при наведении */
+.msg-row:hover .msg-react-bar {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+.msg-react-bar {
+  transition: opacity 0.15s ease;
+}
+
 /* Nav item active glow */
 .nav-item-active {
   animation: navGlow 3s ease-in-out infinite;
