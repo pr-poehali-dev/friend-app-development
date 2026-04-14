@@ -118,6 +118,7 @@ interface Chat {
   last_message: string;
   last_time: string;
   unread: number;
+  other_user_id?: number;
 }
 
 interface MsgReaction {
@@ -1319,6 +1320,8 @@ function AppInner() {
   const [sendingMsg, setSendingMsg] = useState(false);
   const [activeCall, setActiveCall] = useState(false);
   const [activeVideo, setActiveVideo] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0); // 0-100
+  const [showChatMenu, setShowChatMenu] = useState(false);
   const [micMuted, setMicMuted] = useState(false);
   const [camOff, setCamOff] = useState(false);
 
@@ -1557,6 +1560,8 @@ function AppInner() {
       return null;
     }
 
+    setUploadProgress(5);
+
     // Читаем файл целиком как ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
@@ -1585,6 +1590,7 @@ function AppInner() {
       throw new Error(err.error || `init failed: ${initRes.status}`);
     }
     const { upload_id } = await initRes.json();
+    setUploadProgress(10);
 
     // 2. chunks — последовательно с повтором при ошибке
     for (let i = 0; i < totalChunks; i++) {
@@ -1609,6 +1615,8 @@ function AppInner() {
         await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
       }
       if (lastErr) throw lastErr;
+      // Прогресс: 10% → 90% по чанкам
+      setUploadProgress(10 + Math.round(((i + 1) / totalChunks) * 80));
     }
 
     // 3. finish
@@ -1621,12 +1629,16 @@ function AppInner() {
       const err = await finishRes.json().catch(() => ({}));
       throw new Error(err.error || `finish failed: ${finishRes.status}`);
     }
-    return await finishRes.json();
+    setUploadProgress(100);
+    const result = await finishRes.json();
+    setTimeout(() => setUploadProgress(0), 600);
+    return result;
   };
 
   const handleFileUpload = async (file: File) => {
     if (!activeChat || uploadingFile) return;
     setUploadingFile(true);
+    setUploadProgress(0);
     try {
       const result = await uploadFileChunked(file, `chat:${activeChat.id}`);
       if (result?.message) {
@@ -1635,6 +1647,7 @@ function AppInner() {
       }
     } catch (e) {
       showToast("Ошибка загрузки файла", e instanceof Error ? e.message : String(e), "error");
+      setUploadProgress(0);
     } finally {
       setUploadingFile(false);
     }
@@ -1643,6 +1656,7 @@ function AppInner() {
   const handleUserFileUpload = async (file: File) => {
     if (uploadingUserFile) return;
     setUploadingUserFile(true);
+    setUploadProgress(0);
     try {
       const result = await uploadFileChunked(file, "store");
       if (result?.file) {
@@ -1650,6 +1664,7 @@ function AppInner() {
       }
     } catch (e) {
       showToast("Ошибка загрузки", e instanceof Error ? e.message : String(e), "error");
+      setUploadProgress(0);
     } finally {
       setUploadingUserFile(false);
     }
@@ -2363,18 +2378,89 @@ function AppInner() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      {[
-                        { icon: "Phone", action: () => setActiveCall(true) },
-                        { icon: "Video", action: () => setActiveVideo(true) },
-                        { icon: "MoreVertical", action: () => {} },
-                      ].map((btn, i) => (
-                        <button key={i} onClick={btn.action} className="w-9 h-9 rounded-xl flex items-center justify-center transition-all" style={{ color: "var(--t-text-dim)", animation: `iconLive ${4 + i}s ease-in-out infinite` }}
-                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `color-mix(in srgb, var(--t-accent) 15%, transparent)`; (e.currentTarget as HTMLElement).style.color = "var(--t-accent)"; }}
-                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "var(--t-text-dim)"; }}>
-                          <Icon name={btn.icon} size={16} />
+                    <div className="flex items-center gap-1" style={{ position: "relative" }}>
+                      {/* Звонок — только для личных чатов */}
+                      {activeChat.type === "personal" && (() => {
+                        const chatContact: Contact = {
+                          id: activeChat.other_user_id ?? 0,
+                          username: "",
+                          display_name: activeChat.name,
+                          avatar_initials: activeChat.avatar,
+                          online: activeChat.online,
+                        };
+                        return (
+                          <>
+                            <button
+                              onClick={() => startCall(chatContact, "audio")}
+                              title="Аудиозвонок"
+                              className="w-9 h-9 rounded-xl flex items-center justify-center transition-all"
+                              style={{ color: "var(--t-text-dim)" }}
+                              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `color-mix(in srgb, var(--t-accent) 15%, transparent)`; (e.currentTarget as HTMLElement).style.color = "var(--t-accent)"; }}
+                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "var(--t-text-dim)"; }}>
+                              <Icon name="Phone" size={16} />
+                            </button>
+                            <button
+                              onClick={() => startCall(chatContact, "video")}
+                              title="Видеозвонок"
+                              className="w-9 h-9 rounded-xl flex items-center justify-center transition-all"
+                              style={{ color: "var(--t-text-dim)" }}
+                              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `color-mix(in srgb, var(--t-accent) 15%, transparent)`; (e.currentTarget as HTMLElement).style.color = "var(--t-accent)"; }}
+                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "var(--t-text-dim)"; }}>
+                              <Icon name="Video" size={16} />
+                            </button>
+                          </>
+                        );
+                      })()}
+                      {/* Три точки — меню чата */}
+                      <div style={{ position: "relative" }}>
+                        <button
+                          onClick={() => setShowChatMenu(v => !v)}
+                          title="Меню чата"
+                          className="w-9 h-9 rounded-xl flex items-center justify-center transition-all"
+                          style={{ color: showChatMenu ? "var(--t-accent)" : "var(--t-text-dim)", background: showChatMenu ? `color-mix(in srgb, var(--t-accent) 15%, transparent)` : "transparent" }}
+                          onMouseEnter={e => { if (!showChatMenu) { (e.currentTarget as HTMLElement).style.background = `color-mix(in srgb, var(--t-accent) 15%, transparent)`; (e.currentTarget as HTMLElement).style.color = "var(--t-accent)"; } }}
+                          onMouseLeave={e => { if (!showChatMenu) { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "var(--t-text-dim)"; } }}>
+                          <Icon name="MoreVertical" size={16} />
                         </button>
-                      ))}
+                        {showChatMenu && (
+                          <div
+                            style={{
+                              position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 50,
+                              background: "var(--t-bg-panel)", border: "1px solid var(--t-border)",
+                              borderRadius: 12, padding: "6px 0", minWidth: 180,
+                              boxShadow: "0 12px 40px rgba(0,0,0,0.4)",
+                              animation: "emojiPickerIn 0.15s ease",
+                            }}
+                            onMouseLeave={() => setShowChatMenu(false)}
+                          >
+                            {[
+                              { icon: "Search", label: "Поиск по сообщениям", action: () => {} },
+                              { icon: "Bell", label: "Уведомления", action: () => {} },
+                              ...(activeChat.type === "group" ? [
+                                { icon: "Users", label: "Участники группы", action: () => {} },
+                                { icon: "UserPlus", label: "Добавить участника", action: () => {} },
+                              ] : []),
+                              { icon: "Trash2", label: "Очистить историю", action: () => { setShowChatMenu(false); } },
+                            ].map((item, idx) => (
+                              <button key={idx} onClick={() => { item.action(); setShowChatMenu(false); }}
+                                style={{
+                                  display: "flex", alignItems: "center", gap: 10,
+                                  width: "100%", padding: "8px 14px",
+                                  background: "transparent", border: "none",
+                                  color: item.icon === "Trash2" ? "var(--t-danger)" : "var(--t-text)",
+                                  fontFamily: "var(--font-body, sans-serif)", fontSize: 13,
+                                  cursor: "pointer", textAlign: "left", transition: "background 0.1s",
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.background = "color-mix(in srgb, var(--t-accent) 10%, transparent)")}
+                                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                              >
+                                <Icon name={item.icon} size={14} style={{ flexShrink: 0, opacity: 0.7 }} />
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -2502,9 +2588,15 @@ function AppInner() {
                     {uploadingFile && (
                       <div className="flex items-center gap-2 mb-2 px-1" style={{ fontFamily: FONT.body, fontSize: 11, color: "var(--t-accent)" }}>
                         <div className="w-3 h-3 border-2 rounded-full animate-spin flex-shrink-0" style={{ borderColor: "var(--t-accent)", borderTopColor: "transparent" }} />
-                        <span>Загружаем файл...</span>
-                        <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: "var(--t-border)" }}>
-                          <div className="h-full rounded-full animate-pulse" style={{ background: "var(--t-accent)", width: "60%" }} />
+                        <span>Загружаем файл... {uploadProgress > 0 ? `${uploadProgress}%` : ""}</span>
+                        <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--t-border)" }}>
+                          <div className="h-full rounded-full" style={{
+                            background: uploadProgress === 100
+                              ? "var(--t-online)"
+                              : "linear-gradient(90deg, var(--t-accent), color-mix(in srgb, var(--t-accent) 70%, #fff))",
+                            width: `${Math.max(5, uploadProgress)}%`,
+                            transition: "width 0.3s ease",
+                          }} />
                         </div>
                       </div>
                     )}

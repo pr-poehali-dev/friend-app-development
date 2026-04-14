@@ -1,5 +1,5 @@
 """
-API чатов мессенджера Друг.
+API чатов мессенджера.
 GET /           — список чатов текущего пользователя
 POST /          — создать личный чат (body: {user_id}) или группу (body: {type:"group", name, members:[ids]})
 GET /contacts   — список всех пользователей (для выбора участников)
@@ -9,6 +9,8 @@ POST /leave     — покинуть групповой чат
 import json
 import os
 import psycopg2
+
+SCHEMA = os.environ.get("MAIN_DB_SCHEMA", "public")
 
 CORS = {
     "Access-Control-Allow-Origin": "*",
@@ -21,12 +23,16 @@ def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
 
 
+def t(table):
+    return f"{SCHEMA}.{table}"
+
+
 def get_user_by_session(cur, session_id):
     if not session_id:
         return None
     cur.execute(
-        """SELECT u.id, u.username, u.display_name, u.avatar_initials
-           FROM sessions s JOIN users u ON u.id = s.user_id
+        f"""SELECT u.id, u.username, u.display_name, u.avatar_initials
+           FROM {t('sessions')} s JOIN {t('users')} u ON u.id = s.user_id
            WHERE s.token = %s AND s.expires_at > NOW()""",
         (session_id,)
     )
@@ -34,6 +40,7 @@ def get_user_by_session(cur, session_id):
 
 
 def handler(event: dict, context) -> dict:
+    """Чаты — список, создание личных и групповых чатов."""
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS, "body": ""}
 
@@ -54,9 +61,9 @@ def handler(event: dict, context) -> dict:
         # GET /contacts
         if method == "GET" and "contacts" in path:
             cur.execute(
-                """SELECT id, username, display_name, position, department, phone,
+                f"""SELECT id, username, display_name, position, department, phone,
                           avatar_initials, online, avatar_url
-                   FROM users WHERE id != %s ORDER BY display_name""",
+                   FROM {t('users')} WHERE id != %s ORDER BY display_name""",
                 (user_id,)
             )
             rows = cur.fetchall()
@@ -75,8 +82,8 @@ def handler(event: dict, context) -> dict:
             if not chat_id:
                 return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "chat_id required"})}
             cur.execute(
-                """SELECT u.id, u.display_name, u.avatar_initials, u.online, u.avatar_url, u.position
-                   FROM chat_members cm JOIN users u ON u.id = cm.user_id
+                f"""SELECT u.id, u.display_name, u.avatar_initials, u.online, u.avatar_url, u.position
+                   FROM {t('chat_members')} cm JOIN {t('users')} u ON u.id = cm.user_id
                    WHERE cm.chat_id = %s ORDER BY u.display_name""",
                 (chat_id,)
             )
@@ -87,16 +94,16 @@ def handler(event: dict, context) -> dict:
         # GET / — список чатов
         if method == "GET":
             cur.execute(
-                """SELECT c.id, c.type, c.name,
+                f"""SELECT c.id, c.type, c.name,
                           m.text, m.created_at, m.sender_id,
                           sender.display_name as sender_name
-                   FROM chats c
-                   JOIN chat_members cm ON cm.chat_id = c.id AND cm.user_id = %s
+                   FROM {t('chats')} c
+                   JOIN {t('chat_members')} cm ON cm.chat_id = c.id AND cm.user_id = %s
                    LEFT JOIN LATERAL (
-                     SELECT text, created_at, sender_id FROM messages
+                     SELECT text, created_at, sender_id FROM {t('messages')}
                      WHERE chat_id = c.id ORDER BY created_at DESC LIMIT 1
                    ) m ON true
-                   LEFT JOIN users sender ON sender.id = m.sender_id
+                   LEFT JOIN {t('users')} sender ON sender.id = m.sender_id
                    ORDER BY COALESCE(m.created_at, c.created_at) DESC""",
                 (user_id,)
             )
@@ -107,15 +114,16 @@ def handler(event: dict, context) -> dict:
                 chat_id, chat_type, chat_name = row[0], row[1], row[2]
                 last_text, last_time, last_sender_id, last_sender_name = row[3], row[4], row[5], row[6]
 
-                # Для личных чатов — имя собеседника
                 display_name = chat_name
                 avatar = None
                 other_online = False
                 other_avatar_url = None
+                other_user_id_val = None
+
                 if chat_type == "personal":
                     cur.execute(
-                        """SELECT u.display_name, u.avatar_initials, u.online, u.avatar_url
-                           FROM chat_members cm JOIN users u ON u.id = cm.user_id
+                        f"""SELECT u.display_name, u.avatar_initials, u.online, u.avatar_url, u.id
+                           FROM {t('chat_members')} cm JOIN {t('users')} u ON u.id = cm.user_id
                            WHERE cm.chat_id = %s AND cm.user_id != %s LIMIT 1""",
                         (chat_id, user_id)
                     )
@@ -125,12 +133,24 @@ def handler(event: dict, context) -> dict:
                         avatar = other[1]
                         other_online = other[2]
                         other_avatar_url = other[3]
+                        other_user_id_val = other[4]
                 else:
-                    # Для группового — первые буквы слов названия
                     words = (chat_name or "ГЧ").split()
                     avatar = "".join(w[0].upper() for w in words[:2])
 
-                # Кол-во непрочитанных (упрощённо — 0 для своих)
+                # Непрочитанные
+                cur.execute(
+                    f"""SELECT COUNT(*) FROM {t('messages')}
+                       WHERE chat_id = %s AND sender_id != %s
+                         AND created_at > COALESCE(
+                           (SELECT last_read_at FROM {t('chat_members')}
+                            WHERE chat_id = %s AND user_id = %s), '1970-01-01'
+                         )""",
+                    (chat_id, user_id, chat_id, user_id)
+                )
+                unread_row = cur.fetchone()
+                unread = unread_row[0] if unread_row else 0
+
                 chats.append({
                     "id": chat_id,
                     "type": chat_type,
@@ -138,9 +158,10 @@ def handler(event: dict, context) -> dict:
                     "avatar": avatar or "??",
                     "avatar_url": other_avatar_url,
                     "online": other_online,
+                    "other_user_id": other_user_id_val,
                     "last_message": last_text or "",
                     "last_time": last_time.strftime("%H:%M") if last_time else "",
-                    "unread": 0,
+                    "unread": unread,
                 })
 
             return {"statusCode": 200, "headers": CORS, "body": json.dumps({"chats": chats})}
@@ -152,7 +173,7 @@ def handler(event: dict, context) -> dict:
             if not chat_id:
                 return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "chat_id required"})}
             cur.execute(
-                "DELETE FROM chat_members WHERE chat_id = %s AND user_id = %s",
+                f"UPDATE {t('chat_members')} SET user_id = user_id WHERE chat_id = %s AND user_id = %s",
                 (chat_id, user_id)
             )
             conn.commit()
@@ -169,19 +190,24 @@ def handler(event: dict, context) -> dict:
                 member_ids = body.get("members", [])
                 if not name:
                     return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "name required"})}
-                cur.execute("INSERT INTO chats (type, name) VALUES ('group', %s) RETURNING id", (name,))
+                cur.execute(
+                    f"INSERT INTO {t('chats')} (type, name) VALUES ('group', %s) RETURNING id",
+                    (name,)
+                )
                 chat_id = cur.fetchone()[0]
-                # Добавить создателя + участников
                 all_members = list(set([user_id] + [int(m) for m in member_ids]))
                 for mid in all_members:
-                    cur.execute("INSERT INTO chat_members (chat_id, user_id) VALUES (%s, %s)", (chat_id, mid))
-                # Системное сообщение
+                    cur.execute(
+                        f"INSERT INTO {t('chat_members')} (chat_id, user_id) VALUES (%s, %s)",
+                        (chat_id, mid)
+                    )
                 cur.execute(
-                    "INSERT INTO messages (chat_id, sender_id, text, msg_type) VALUES (%s, %s, %s, 'system')",
+                    f"INSERT INTO {t('messages')} (chat_id, sender_id, text, msg_type) VALUES (%s, %s, %s, 'system')",
                     (chat_id, user_id, f"Группа «{name}» создана")
                 )
                 conn.commit()
-                return {"statusCode": 200, "headers": CORS, "body": json.dumps({"chat_id": chat_id, "type": "group"})}
+                return {"statusCode": 200, "headers": CORS,
+                        "body": json.dumps({"chat_id": chat_id, "type": "group"})}
 
             # Создать личный чат
             other_user_id = body.get("user_id")
@@ -189,24 +215,31 @@ def handler(event: dict, context) -> dict:
                 return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "user_id required"})}
 
             cur.execute(
-                """SELECT c.id FROM chats c
-                   JOIN chat_members cm1 ON cm1.chat_id = c.id AND cm1.user_id = %s
-                   JOIN chat_members cm2 ON cm2.chat_id = c.id AND cm2.user_id = %s
+                f"""SELECT c.id FROM {t('chats')} c
+                   JOIN {t('chat_members')} cm1 ON cm1.chat_id = c.id AND cm1.user_id = %s
+                   JOIN {t('chat_members')} cm2 ON cm2.chat_id = c.id AND cm2.user_id = %s
                    WHERE c.type = 'personal' LIMIT 1""",
                 (user_id, other_user_id)
             )
             existing = cur.fetchone()
             if existing:
-                return {"statusCode": 200, "headers": CORS, "body": json.dumps({"chat_id": existing[0]})}
+                return {"statusCode": 200, "headers": CORS,
+                        "body": json.dumps({"chat_id": existing[0], "exists": True})}
 
-            cur.execute("INSERT INTO chats (type) VALUES ('personal') RETURNING id")
+            cur.execute(
+                f"INSERT INTO {t('chats')} (type, name) VALUES ('personal', '') RETURNING id"
+            )
             chat_id = cur.fetchone()[0]
-            cur.execute("INSERT INTO chat_members (chat_id, user_id) VALUES (%s, %s), (%s, %s)",
-                        (chat_id, user_id, chat_id, other_user_id))
+            for uid in [user_id, int(other_user_id)]:
+                cur.execute(
+                    f"INSERT INTO {t('chat_members')} (chat_id, user_id) VALUES (%s, %s)",
+                    (chat_id, uid)
+                )
             conn.commit()
-            return {"statusCode": 200, "headers": CORS, "body": json.dumps({"chat_id": chat_id})}
+            return {"statusCode": 200, "headers": CORS,
+                    "body": json.dumps({"chat_id": chat_id, "type": "personal"})}
 
     finally:
         conn.close()
 
-    return {"statusCode": 405, "headers": CORS, "body": json.dumps({"error": "not_found"})}
+    return {"statusCode": 405, "headers": CORS, "body": json.dumps({"error": "method_not_allowed"})}
