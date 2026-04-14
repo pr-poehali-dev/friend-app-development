@@ -59,6 +59,32 @@ def handler(event: dict, context) -> dict:
 
         user_id, user_name, user_avatar = user[0], user[1], user[2]
 
+        # GET /ice-servers — ICE-серверы для WebRTC (STUN + TURN из секрета)
+        if method == "GET" and "ice-servers" in path:
+            ice_servers = [
+                {"urls": "stun:stun.l.google.com:19302"},
+                {"urls": "stun:stun1.l.google.com:19302"},
+                {"urls": "stun:stun2.l.google.com:19302"},
+                {"urls": "stun:stun.cloudflare.com:3478"},
+            ]
+            turn_raw = os.environ.get("TURN_CREDENTIALS", "")
+            if turn_raw:
+                try:
+                    turn_cfg = json.loads(turn_raw)
+                    if isinstance(turn_cfg, list):
+                        ice_servers.extend(turn_cfg)
+                    else:
+                        ice_servers.append(turn_cfg)
+                except Exception as e:
+                    print(f"TURN parse error: {e}")
+            # Всегда добавляем запасной публичный TURN
+            ice_servers.extend([
+                {"urls": ["turn:relay1.expressturn.com:3478", "turns:relay1.expressturn.com:443"],
+                 "username": "efOG5BPZFP2AQIQPNJ", "credential": "uBhKqPuaVmvBFxp8"},
+            ])
+            return {"statusCode": 200, "headers": CORS,
+                    "body": json.dumps({"ice_servers": ice_servers})}
+
         # GET /history — история звонков
         if method == "GET" and "history" in path:
             cur.execute(

@@ -1877,26 +1877,16 @@ function AppInner() {
     });
   };
 
-  const createPeerConnection = (callId: number, targetUserId: number) => {
+  const createPeerConnection = (callId: number, targetUserId: number, iceServers?: RTCIceServer[]) => {
+    const defaultIce: RTCIceServer[] = [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+      { urls: "stun:stun.cloudflare.com:3478" },
+      { urls: ["turn:relay1.expressturn.com:3478", "turns:relay1.expressturn.com:443"] as string[],
+        username: "efOG5BPZFP2AQIQPNJ", credential: "uBhKqPuaVmvBFxp8" },
+    ];
     const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
-        { urls: "stun:stun2.l.google.com:19302" },
-        { urls: "stun:stun3.l.google.com:19302" },
-        { urls: "stun:stun4.l.google.com:19302" },
-        { urls: "stun:stun.cloudflare.com:3478" },
-        { urls: "stun:stun.ekiga.net" },
-        { urls: "stun:stun.ideasip.com" },
-        {
-          urls: [
-            "turn:relay1.expressturn.com:3478",
-            "turns:relay1.expressturn.com:443",
-          ],
-          username: "efOG5BPZFP2AQIQPNJ",
-          credential: "uBhKqPuaVmvBFxp8",
-        },
-      ],
+      iceServers: iceServers || defaultIce,
       iceCandidatePoolSize: 10,
     });
     pc.onicecandidate = (e) => {
@@ -1929,6 +1919,14 @@ function AppInner() {
   };
 
   const startCall = async (contact: Contact, type: "audio" | "video") => {
+    if (!contact.id) {
+      setCallTarget(contact);
+      setCallType(type);
+      setActiveCall(true);
+      setCallStatus("error");
+      setCallErrorMsg("Не удалось определить пользователя для звонка");
+      return;
+    }
     setCallTarget(contact);
     setCallType(type);
     setActiveCall(true);
@@ -1956,23 +1954,35 @@ function AppInner() {
       return;
     }
     try {
-      const callRes = await fetch(`${API.calls}/start`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({ callee_id: contact.id, call_type: type }),
-      });
+      // Получаем ICE-серверы и создаём звонок параллельно
+      const [iceRes, callRes] = await Promise.all([
+        fetch(`${API.calls}/ice-servers`, { headers: authHeaders() }).catch(() => null),
+        fetch(`${API.calls}/start`, {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({ callee_id: contact.id, call_type: type }),
+        }),
+      ]);
+      if (!callRes.ok) {
+        const errData = await callRes.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${callRes.status}`);
+      }
+      const iceData = iceRes?.ok ? await iceRes.json().catch(() => null) : null;
+      const iceServers: RTCIceServer[] | undefined = iceData?.ice_servers;
       const callData = await callRes.json();
       const callId = callData.call_id;
+      if (!callId) throw new Error("Сервер не вернул ID звонка");
       setActiveCallId(callId);
-      const pc = createPeerConnection(callId, contact.id);
+      const pc = createPeerConnection(callId, contact.id, iceServers);
       stream.getTracks().forEach(track => pc.addTrack(track, stream!));
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       await sendSignal(callId, contact.id, "offer", offer);
       setPeerConnection(pc);
-    } catch {
+    } catch (err) {
       setCallStatus("error");
-      setCallErrorMsg("Не удалось начать звонок. Проверьте интернет-соединение");
+      const msg = err instanceof Error ? err.message : String(err);
+      setCallErrorMsg(msg || "Не удалось начать звонок");
     }
   };
 
@@ -2388,8 +2398,14 @@ function AppInner() {
                     <div className="flex items-center gap-1" style={{ position: "relative" }}>
                       {/* Звонок — только для личных чатов */}
                       {activeChat.type === "personal" && (() => {
+                        // Ищем реальный ID из списка контактов по имени или other_user_id
+                        const knownContact = contacts.find(c => c.id === activeChat.other_user_id)
+                          || externalContacts.find(c => c.linked_user_id === activeChat.other_user_id);
+                        const resolvedId = activeChat.other_user_id
+                          || knownContact?.id
+                          || (externalContacts.find(c => c.display_name === activeChat.name)?.linked_user_id ?? 0);
                         const chatContact: Contact = {
-                          id: activeChat.other_user_id ?? 0,
+                          id: resolvedId,
                           username: "",
                           display_name: activeChat.name,
                           avatar_initials: activeChat.avatar,
@@ -2792,10 +2808,10 @@ function AppInner() {
                               <button onClick={() => openChatWith(c.linked_user_id || c.id)} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
                                 <Icon name="MessageSquare" size={11} style={liveIcon(index * 0.3)} /> {t("contacts_chat")}
                               </button>
-                              <button onClick={() => startCall(c as unknown as Contact, "audio")} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
+                              <button onClick={() => startCall({ id: c.linked_user_id || c.id, username: "", display_name: c.display_name, avatar_initials: c.avatar_initials, online: c.online }, "audio")} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
                                 <Icon name="Phone" size={11} style={liveIcon(index * 0.3 + 0.1)} /> {t("contacts_call")}
                               </button>
-                              <button onClick={() => startCall(c as unknown as Contact, "video")} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
+                              <button onClick={() => startCall({ id: c.linked_user_id || c.id, username: "", display_name: c.display_name, avatar_initials: c.avatar_initials, online: c.online }, "video")} className="btn-3d flex-1 py-1.5 text-[10px] flex items-center justify-center gap-1" style={{ ...btn3d("var(--t-accent)") }}>
                                 <Icon name="Video" size={11} style={liveIcon(index * 0.3 + 0.2)} /> {t("contacts_video")}
                               </button>
                             </>
