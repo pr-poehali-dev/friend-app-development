@@ -7,6 +7,7 @@ import JoinPage from "@/components/contacts/JoinPage";
 import NotificationToast, { type AppNotification } from "@/components/ui/NotificationToast";
 import { useLang } from "@/LangContext";
 import LanguageSwitcher from "@/components/ui/LanguageSwitcher";
+import CallWindow from "@/components/CallWindow";
 
 // ===== THEME =====
 export type ThemeId = "dark-blue" | "whatsapp" | "telegram" | "light" | "purple" | "slate" | "teal";
@@ -1252,12 +1253,14 @@ function AppInner() {
   const [activeCallId, setActiveCallId] = useState<number | null>(null);
   const [callTarget, setCallTarget] = useState<Contact | null>(null);
   const [callType, setCallType] = useState<"audio" | "video">("audio");
-  const [incomingCall, setIncomingCall] = useState<{id: number; caller_name: string; caller_avatar: string; call_type: string} | null>(null);
+  const [incomingCall, setIncomingCall] = useState<{id: number; caller_name: string; caller_avatar: string; call_type: string; caller_id?: number} | null>(null);
   const [peerConnection, setPeerConnection] = useState<RTCPeerConnection | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [callDuration, setCallDuration] = useState(0);
   const [signalingLastId, setSignalingLastId] = useState(0);
+  const [callStatus, setCallStatus] = useState<"calling" | "ringing" | "active" | "error">("calling");
+  const [callErrorMsg, setCallErrorMsg] = useState<string>("");
   const [uploadingFile, setUploadingFile] = useState(false);
   const [contactSearch, setContactSearch] = useState("");
   const [showAddContact, setShowAddContact] = useState(false);
@@ -1510,6 +1513,7 @@ function AppInner() {
           await sendSignal(activeCallId, sig.from, "answer", answer);
         } else if (sig.type === "answer") {
           await peerConnection.setRemoteDescription(JSON.parse(sig.payload));
+          setCallStatus("active");
         } else if (sig.type === "candidate") {
           await peerConnection.addIceCandidate(JSON.parse(sig.payload));
         } else if (sig.type === "hangup") {
@@ -1533,15 +1537,38 @@ function AppInner() {
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun.cloudflare.com:3478" },
+        {
+          urls: "turn:openrelay.metered.ca:80",
+          username: "openrelayproject",
+          credential: "openrelayproject",
+        },
+        {
+          urls: "turn:openrelay.metered.ca:443",
+          username: "openrelayproject",
+          credential: "openrelayproject",
+        },
       ],
     });
     pc.onicecandidate = (e) => {
       if (e.candidate) sendSignal(callId, targetUserId, "candidate", e.candidate);
     };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === "connected") setCallStatus("active");
+      if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+        setCallStatus("error");
+        setCallErrorMsg("Соединение прервано");
+      }
+    };
     pc.ontrack = (e) => {
-      const stream = new MediaStream();
-      stream.addTrack(e.track);
-      setRemoteStream(stream);
+      setRemoteStream(prev => {
+        const stream = prev || new MediaStream();
+        e.streams[0]?.getTracks().forEach(t => {
+          if (!stream.getTracks().find(x => x.id === t.id)) stream.addTrack(t);
+        });
+        if (!e.streams[0]) stream.addTrack(e.track);
+        return stream;
+      });
     };
     return pc;
   };
@@ -1550,10 +1577,23 @@ function AppInner() {
     setCallTarget(contact);
     setCallType(type);
     setActiveCall(true);
+    setCallStatus("calling");
+    setCallErrorMsg("");
     setCallDuration(0);
+    let stream: MediaStream | null = null;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === "video" });
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: type === "video" ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false,
+      });
       setLocalStream(stream);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Нет доступа к микрофону/камере";
+      setCallStatus("error");
+      setCallErrorMsg(msg);
+      return;
+    }
+    try {
       const callRes = await fetch(`${API.calls}/start`, {
         method: "POST",
         headers: authHeaders(),
@@ -1563,13 +1603,14 @@ function AppInner() {
       const callId = callData.call_id;
       setActiveCallId(callId);
       const pc = createPeerConnection(callId, contact.id);
-      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+      stream.getTracks().forEach(track => pc.addTrack(track, stream!));
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       await sendSignal(callId, contact.id, "offer", offer);
       setPeerConnection(pc);
     } catch {
-      setActiveCall(false);
+      setCallStatus("error");
+      setCallErrorMsg("Ошибка соединения с сервером");
     }
   };
 
@@ -1579,6 +1620,8 @@ function AppInner() {
     setActiveCallId(call.id);
     setCallType(call.call_type as "audio" | "video");
     setActiveCall(true);
+    setCallStatus("ringing");
+    setCallErrorMsg("");
     setCallDuration(0);
     await fetch(`${API.calls}/answer`, {
       method: "POST",
@@ -1586,12 +1629,19 @@ function AppInner() {
       body: JSON.stringify({ call_id: call.id, accepted: true }),
     });
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: call.call_type === "video" });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: call.call_type === "video" ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false,
+      });
       setLocalStream(stream);
-      const pc = createPeerConnection(call.id, 0);
+      const pc = createPeerConnection(call.id, call.caller_id ?? 0);
       stream.getTracks().forEach(track => pc.addTrack(track, stream));
       setPeerConnection(pc);
-    } catch (e) { console.warn("media error", e); }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Нет доступа к микрофону/камере";
+      setCallStatus("error");
+      setCallErrorMsg(msg);
+    }
   };
 
   const endCall = async () => {
@@ -1623,6 +1673,20 @@ function AppInner() {
     const iv = setInterval(() => setCallDuration(d => d + 1), 1000);
     return () => clearInterval(iv);
   }, [activeCall]);
+
+  const toggleMic = () => {
+    if (localStream) {
+      localStream.getAudioTracks().forEach(t => { t.enabled = !t.enabled; });
+      setMicMuted(m => !m);
+    }
+  };
+
+  const toggleCam = () => {
+    if (localStream) {
+      localStream.getVideoTracks().forEach(t => { t.enabled = !t.enabled; });
+      setCamOff(c => !c);
+    }
+  };
 
   const formatDuration = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
@@ -2523,58 +2587,21 @@ function AppInner() {
         </div>
       )}
 
-      {/* Active Call Modal */}
       {activeCall && (
-        <div className={`fixed z-50 ${callType === "video" ? "inset-0 bg-[#050c18] flex flex-col" : "inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center"}`}>
-          {callType === "video" ? (
-            <>
-              <div className="flex-1 relative bg-[#0a1120]">
-                {remoteStream ? (
-                  <video autoPlay playsInline className="w-full h-full object-cover" ref={el => { if (el) el.srcObject = remoteStream; }} />
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full">
-                    <AvatarBadge initials={callTarget?.avatar_initials || "??"} size="lg" />
-                    <div className="text-sm font-medium text-[#e2e8f0] mt-3">{callTarget?.display_name || "Звонок"}</div>
-                    <div className="text-xs text-[#22c55e] font-mono mt-1 animate-pulse">Соединяем...</div>
-                  </div>
-                )}
-                {localStream && (
-                  <video autoPlay playsInline muted className="absolute bottom-4 right-4 w-32 h-24 object-cover rounded-sm border border-[#2a3548]" ref={el => { if (el) el.srcObject = localStream; }} />
-                )}
-                <div className="absolute top-4 left-4 bg-black/50 rounded-sm px-3 py-1.5 text-xs text-[#e2e8f0] font-mono">{formatDuration(callDuration)}</div>
-              </div>
-              <div className="flex justify-center items-center gap-3 py-4 border-t border-[#1a2332] bg-[#0a1120]">
-                <button onClick={() => setMicMuted(v => !v)} className={`w-11 h-11 rounded-full flex items-center justify-center border transition-all ${micMuted ? "bg-[#f87171] border-[#f87171] text-white" : "bg-[#1a2332] border-[#2a3548] text-[#94a3b8]"}`}>
-                  <Icon name={micMuted ? "MicOff" : "Mic"} size={16} />
-                </button>
-                <button onClick={() => setCamOff(v => !v)} className={`w-11 h-11 rounded-full flex items-center justify-center border transition-all ${camOff ? "bg-[#f87171] border-[#f87171] text-white" : "bg-[#1a2332] border-[#2a3548] text-[#94a3b8]"}`}>
-                  <Icon name={camOff ? "VideoOff" : "Video"} size={16} />
-                </button>
-                <button onClick={endCall} className="w-12 h-12 rounded-full bg-[#f87171] border border-[#f87171] text-white flex items-center justify-center hover:bg-[#ef4444] transition-colors">
-                  <Icon name="PhoneOff" size={18} />
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="bg-[#0a1120] border border-[#1a2332] rounded-sm p-8 w-64 text-center shadow-2xl">
-              {remoteStream && <audio autoPlay ref={el => { if (el) el.srcObject = remoteStream; }} />}
-              <AvatarBadge initials={callTarget?.avatar_initials || activeChat?.avatar || "??"} size="lg" />
-              <div className="text-sm font-medium text-[#e2e8f0] mt-4 mb-1">{callTarget?.display_name || activeChat?.name || "Звонок"}</div>
-              <div className="text-xs text-[#22c55e] font-mono mb-6">{remoteStream ? formatDuration(callDuration) : "Соединяем..."}</div>
-              <div className="flex justify-center gap-3">
-                <button onClick={() => setMicMuted(v => !v)} className={`w-11 h-11 rounded-full flex items-center justify-center border transition-all ${micMuted ? "bg-[#f87171] border-[#f87171] text-white" : "bg-[#1a2332] border-[#2a3548] text-[#94a3b8]"}`}>
-                  <Icon name={micMuted ? "MicOff" : "Mic"} size={16} />
-                </button>
-                <button onClick={endCall} className="w-11 h-11 rounded-full bg-[#f87171] border border-[#f87171] text-white flex items-center justify-center hover:bg-[#ef4444] transition-colors">
-                  <Icon name="PhoneOff" size={16} />
-                </button>
-                <button className="w-11 h-11 rounded-full bg-[#1a2332] border border-[#2a3548] text-[#94a3b8] flex items-center justify-center">
-                  <Icon name="Volume2" size={16} />
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+        <CallWindow
+          callType={callType}
+          callTarget={callTarget}
+          localStream={localStream}
+          remoteStream={remoteStream}
+          callDuration={callDuration}
+          micMuted={micMuted}
+          camOff={camOff}
+          status={callStatus}
+          errorMsg={callErrorMsg}
+          onHangup={endCall}
+          onToggleMic={toggleMic}
+          onToggleCam={toggleCam}
+        />
       )}
     </div>
   );
