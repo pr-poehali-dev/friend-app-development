@@ -138,9 +138,11 @@ def handler(event: dict, context) -> dict:
             return {"statusCode": 200, "headers": CORS, "body": json.dumps({"messages": messages})}
 
         if method == "POST":
+            qs_params = event.get("queryStringParameters") or {}
+            action_param = qs_params.get("action", "")
 
-            # ── POST /react — поставить / убрать реакцию ─────────────────────
-            if "react" in path:
+            # ── POST /react или ?action=react ─────────────────────────────────
+            if "react" in path or action_param == "react":
                 body = json.loads(event.get("body") or "{}")
                 message_id = body.get("message_id")
                 emoji = (body.get("emoji") or "").strip()
@@ -248,8 +250,7 @@ def handler(event: dict, context) -> dict:
                 return {"statusCode": 200, "headers": CORS, "body": json.dumps({"message": message})}
 
             # ── POST ?action=send — переслать файл по URL ────────────────────
-            qs = event.get("queryStringParameters") or {}
-            if qs.get("action") == "send":
+            if action_param == "send":
                 body = json.loads(event.get("body") or "{}")
                 chat_id = body.get("chat_id")
                 file_name = body.get("file_name", "file")

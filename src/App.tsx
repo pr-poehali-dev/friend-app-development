@@ -1342,11 +1342,12 @@ function AppInner() {
   const [callErrorMsg, setCallErrorMsg] = useState<string>("");
   const [uploadingFile, setUploadingFile] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [userFiles, setUserFiles] = useState<{id:number;name:string;size:string;url:string;mime:string;date:string;sender:string}[]>([]);
   const [loadingUserFiles, setLoadingUserFiles] = useState(false);
   const [uploadingUserFile, setUploadingUserFile] = useState(false);
   const [sendFileModal, setSendFileModal] = useState<{id:number;name:string;url:string} | null>(null);
-  const [forwardFileModal, setForwardFileModal] = useState<{name:string;url:string} | null>(null);
+  const [forwardFileModal, setForwardFileModal] = useState<{files:{name:string;url:string}[];} | null>(null);
   const [forwardChatIds, setForwardChatIds] = useState<number[]>([]);
   const [forwardingFile, setForwardingFile] = useState(false);
   const [sendChatIds, setSendChatIds] = useState<number[]>([]);
@@ -1516,7 +1517,7 @@ function AppInner() {
 
   const handleReact = async (messageId: number, emoji: string) => {
     try {
-      const res = await fetch(`${API.messages}/react`, {
+      const res = await fetch(`${API.messages}?action=react`, {
         method: "POST",
         headers: authHeaders(),
         body: JSON.stringify({ message_id: messageId, emoji }),
@@ -1695,23 +1696,33 @@ function AppInner() {
     if (!forwardFileModal || forwardChatIds.length === 0) return;
     setForwardingFile(true);
     try {
-      await Promise.all(forwardChatIds.map(chatId =>
-        fetch(`${API.messages}?action=send`, {
-          method: "POST",
-          headers: authHeaders(),
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: "",
-            msg_type: "file",
-            file_name: forwardFileModal.name,
-            file_url: forwardFileModal.url,
-          }),
-        })
-      ));
+      const results = await Promise.all(
+        forwardChatIds.flatMap(chatId =>
+          forwardFileModal.files.map(async f => {
+            const res = await fetch(`${API.messages}?action=send`, {
+              method: "POST",
+              headers: authHeaders(),
+              body: JSON.stringify({ chat_id: chatId, text: "", msg_type: "file", file_name: f.name, file_url: f.url }),
+            });
+            const data = await res.json();
+            return { chatId, message: data.message };
+          })
+        )
+      );
+      // Добавить сообщения в текущий чат если он среди выбранных
+      if (activeChat) {
+        const msgsForActive = results
+          .filter(r => r.chatId === activeChat.id && r.message)
+          .map(r => r.message);
+        if (msgsForActive.length > 0) {
+          setMessages(prev => [...prev, ...msgsForActive]);
+        }
+      }
       setForwardFileModal(null);
       setForwardChatIds([]);
-      showToast("Файл переслан", `В ${forwardChatIds.length} чат(а)`, "info");
-      loadChats();
+      const cnt = forwardChatIds.length;
+      const fcnt = forwardFileModal.files.length;
+      showToast("Переслано", `${fcnt} файл(а) → ${cnt} чат(а)`, "info");
     } finally {
       setForwardingFile(false);
     }
@@ -2522,7 +2533,34 @@ function AppInner() {
                   </div>
 
                   {/* Область сообщений */}
-                  <div className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-2" style={{ background: "var(--t-chat-bg)", backgroundImage: "var(--t-chat-pattern)", backgroundSize: "var(--t-chat-pattern-size, auto)" }}>
+                  <div
+                    className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-2"
+                    style={{ background: "var(--t-chat-bg)", backgroundImage: "var(--t-chat-pattern)", backgroundSize: "var(--t-chat-pattern-size, auto)", position: "relative" }}
+                    onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
+                    onDragLeave={e => { e.preventDefault(); setDragOver(false); }}
+                    onDrop={e => {
+                      e.preventDefault();
+                      setDragOver(false);
+                      if (!activeChat) return;
+                      const files = Array.from(e.dataTransfer.files);
+                      files.forEach(f => handleFileUpload(f));
+                    }}
+                  >
+                    {dragOver && (
+                      <div style={{
+                        position: "absolute", inset: 0, zIndex: 20,
+                        background: "color-mix(in srgb, var(--t-accent) 12%, transparent)",
+                        border: "2px dashed var(--t-accent)",
+                        borderRadius: 12,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        pointerEvents: "none",
+                      }}>
+                        <div style={{ textAlign: "center" }}>
+                          <Icon name="Upload" size={40} style={{ color: "var(--t-accent)", margin: "0 auto 8px" }} />
+                          <div style={{ fontFamily: FONT.heading, fontWeight: 700, fontSize: 14, color: "var(--t-accent)" }}>Отпустите для отправки</div>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex items-center gap-3 mb-3">
                       <div className="flex-1 h-px" style={{ background: "var(--t-border)" }} />
                       <span style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)" }}>
@@ -2566,7 +2604,7 @@ function AppInner() {
                                     </a>
                                     <button
                                       title="Переслать"
-                                      onClick={() => { setForwardFileModal({ name, url }); setForwardChatIds([]); }}
+                                      onClick={() => { setForwardFileModal({ files: [{ name, url }] }); setForwardChatIds([]); }}
                                       style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 6, background: "color-mix(in srgb, var(--t-accent) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--t-accent) 20%, transparent)", color: "var(--t-text-dim)", fontFamily: FONT.mono, fontSize: 10, cursor: "pointer" }}
                                     >
                                       <Icon name="Forward" size={11} /> переслать
@@ -4047,18 +4085,28 @@ function AppInner() {
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }}>
           <div className="w-full max-w-sm mx-4 rounded-xl overflow-hidden" style={{ background: "var(--t-bg-panel)", border: "1px solid var(--t-border)", boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}>
             <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "var(--t-border)" }}>
-              <span style={{ fontFamily: FONT.heading, fontWeight: 700, fontSize: 13, color: "var(--t-text)", letterSpacing: "0.08em" }}>ПЕРЕСЛАТЬ ФАЙЛ</span>
+              <span style={{ fontFamily: FONT.heading, fontWeight: 700, fontSize: 13, color: "var(--t-text)", letterSpacing: "0.08em" }}>
+                ПЕРЕСЛАТЬ {forwardFileModal.files.length > 1 ? `${forwardFileModal.files.length} ФАЙЛА` : "ФАЙЛ"}
+              </span>
               <button onClick={() => setForwardFileModal(null)} style={{ color: "var(--t-text-dim)", background: "none", border: "none", cursor: "pointer" }}>
                 <Icon name="X" size={16} />
               </button>
             </div>
             <div className="px-5 py-4 flex flex-col gap-4">
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: "color-mix(in srgb, var(--t-accent) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--t-accent) 20%, transparent)" }}>
-                <Icon name="Paperclip" size={14} style={{ color: "var(--t-accent)", flexShrink: 0 }} />
-                <span style={{ fontFamily: FONT.body, fontSize: 12, color: "var(--t-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{forwardFileModal.name}</span>
+              {/* Список файлов */}
+              <div className="flex flex-col gap-1 max-h-24 overflow-y-auto">
+                {forwardFileModal.files.map((f, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: "color-mix(in srgb, var(--t-accent) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--t-accent) 20%, transparent)" }}>
+                    <Icon name="Paperclip" size={12} style={{ color: "var(--t-accent)", flexShrink: 0 }} />
+                    <span style={{ fontFamily: FONT.body, fontSize: 11, color: "var(--t-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
+                  </div>
+                ))}
               </div>
+              {/* Выбор чатов */}
               <div>
-                <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)", letterSpacing: "0.1em", marginBottom: 8 }}>ВЫБЕРИТЕ ЧАТЫ</div>
+                <div style={{ fontFamily: FONT.mono, fontSize: 10, color: "var(--t-text-dim)", letterSpacing: "0.1em", marginBottom: 8 }}>
+                  ВЫБЕРИТЕ ЧАТЫ ({forwardChatIds.length} выбрано)
+                </div>
                 <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
                   {chats.map(ch => (
                     <label key={ch.id} className="flex items-center gap-2 cursor-pointer py-1.5 px-2 rounded hover:bg-white/5">
@@ -4082,7 +4130,7 @@ function AppInner() {
                 className="px-4 py-2 text-xs rounded flex items-center gap-1.5 disabled:opacity-50"
                 style={{ ...btn3d("var(--t-accent)") }}>
                 {forwardingFile ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Icon name="Forward" size={12} />}
-                ПЕРЕСЛАТЬ {forwardChatIds.length > 0 ? `(${forwardChatIds.length})` : ""}
+                ПЕРЕСЛАТЬ {forwardChatIds.length > 0 ? `→ ${forwardChatIds.length} чат(а)` : ""}
               </button>
             </div>
           </div>
