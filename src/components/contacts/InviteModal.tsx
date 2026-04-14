@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { FONT, btn3d, card3d, heading3d, input3d } from "@/styles/theme3d";
 import Icon from "@/components/ui/icon";
 
@@ -20,8 +21,11 @@ interface Props {
 const APP_URL = window.location.origin;
 
 function QRCode({ value, size = 200 }: { value: string; size?: number }) {
-  const url = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}&bgcolor=ffffff&color=007a63&margin=10`;
-  return <img src={url} alt="QR" width={size} height={size} style={{ borderRadius: 8 }} />;
+  return (
+    <div style={{ background: "#fff", padding: 12, borderRadius: 8, display: "inline-block" }}>
+      <QRCodeSVG value={value} size={size} fgColor="#007a63" bgColor="#ffffff" />
+    </div>
+  );
 }
 
 export default function InviteModal({ onClose, apiUrl, sessionId }: Props) {
@@ -93,11 +97,21 @@ export default function InviteModal({ onClose, apiUrl, sessionId }: Props) {
   };
 
   const downloadQR = (code: string) => {
-    const url = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(getInviteUrl(code))}&bgcolor=ffffff&color=007a63&margin=20`;
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `invite-${code}.png`;
-    a.click();
+    const svg = document.querySelector(".qr-download-target svg") as SVGElement;
+    if (!svg) return;
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const canvas = document.createElement("canvas");
+    canvas.width = 400; canvas.height = 400;
+    const ctx = canvas.getContext("2d")!;
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, 400, 400);
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/png");
+      a.download = `invite-${code}.png`;
+      a.click();
+    };
+    img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
   };
 
   const sendViaEmail = (code: string) => {
@@ -178,7 +192,9 @@ export default function InviteModal({ onClose, apiUrl, sessionId }: Props) {
                     <div className="mt-3">
                       {showQR ? (
                         <div className="flex flex-col items-center gap-3">
-                          <QRCode value={getInviteUrl(invite.code)} size={180} />
+                          <div className="qr-download-target">
+                            <QRCode value={getInviteUrl(invite.code)} size={180} />
+                          </div>
                           <div className="flex gap-2 flex-wrap justify-center">
                             <button onClick={() => downloadQR(invite.code)}
                               className="btn-3d px-3 py-1.5 text-[10px] flex items-center gap-1"
