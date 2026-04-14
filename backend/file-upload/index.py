@@ -123,7 +123,7 @@ def handler(event: dict, context) -> dict:
 
             # Проверить сессию загрузки
             cur.execute(
-                f"SELECT id, file_name, context_key FROM {tbl('upload_sessions')} WHERE upload_id=%s AND user_id=%s",
+                f"SELECT sess_id, file_name, context_key FROM {tbl('upload_sessions')} WHERE upload_id=%s AND user_id=%s",
                 (upload_id, user_id)
             )
             sess = cur.fetchone()
