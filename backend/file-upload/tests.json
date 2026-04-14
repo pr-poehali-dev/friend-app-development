@@ -7,17 +7,10 @@
       "expectedStatus": 200
     },
     {
-      "name": "Upload — unauthorized",
+      "name": "Init upload — unauthorized",
       "method": "POST",
-      "path": "/upload",
-      "body": {"chat_id": 1, "file_name": "test.txt", "file_data": "aGVsbG8="},
-      "expectedStatus": 401
-    },
-    {
-      "name": "Store — unauthorized",
-      "method": "POST",
-      "path": "/store",
-      "body": {"file_name": "test.txt", "file_data": "aGVsbG8="},
+      "path": "/",
+      "body": {"file_name": "test.txt", "file_size": 100, "context_key": "store"},
       "expectedStatus": 401
     }
   ]

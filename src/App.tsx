@@ -1347,14 +1347,14 @@ function AppInner() {
   const [sendingBotMsg, setSendingBotMsg] = useState(false);
   const [externalContacts, setExternalContacts] = useState<{id:number;display_name:string;phone?:string;email?:string;position?:string;department?:string;avatar_initials:string;online:boolean;source:string;linked_user_id?:number}[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [adminUsers, setAdminUsers] = useState<any[]>([]);
+  const [adminUsers, setAdminUsers] = useState<Record<string, unknown>[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminTab, setAdminTab] = useState<"users"|"bans"|"chat">("users");
-  const [adminSelectedUser, setAdminSelectedUser] = useState<any>(null);
-  const [adminUserDetail, setAdminUserDetail] = useState<{contacts:any[];chats:any[];files:any[]}|null>(null);
+  const [adminSelectedUser, setAdminSelectedUser] = useState<Record<string, unknown> | null>(null);
+  const [adminUserDetail, setAdminUserDetail] = useState<{contacts:Record<string,unknown>[];chats:Record<string,unknown>[];files:Record<string,unknown>[]}|null>(null);
   const [adminChatId, setAdminChatId] = useState<number|null>(null);
-  const [adminChatMessages, setAdminChatMessages] = useState<any[]>([]);
-  const [adminBans, setAdminBans] = useState<any[]>([]);
+  const [adminChatMessages, setAdminChatMessages] = useState<Record<string, unknown>[]>([]);
+  const [adminBans, setAdminBans] = useState<Record<string, unknown>[]>([]);
   const [adminBroadcast, setAdminBroadcast] = useState("");
   const [adminBanModal, setAdminBanModal] = useState<{user_id:number;name:string}|null>(null);
   const [adminBanReason, setAdminBanReason] = useState("");
@@ -1505,43 +1505,90 @@ function AppInner() {
   };
 
   // Загрузка файла в чат
-  const handleFileUpload = async (file: File) => {
-    if (!activeChat || uploadingFile) return;
+  // Универсальная чанковая загрузка файла
+  const uploadFileChunked = async (
+    file: File,
+    contextKey: string  // "chat:{id}" или "store"
+  ): Promise<{ message?: unknown; file?: unknown } | null> => {
+    const CHUNK_SIZE = 350 * 1024; // 350KB на чанк (base64 ~= 467KB < 512KB лимит)
     const MAX_MB = 50;
     if (file.size > MAX_MB * 1024 * 1024) {
       alert(`Файл слишком большой. Максимум ${MAX_MB} МБ.`);
-      return;
+      return null;
     }
-    setUploadingFile(true);
-    try {
-      const reader = new FileReader();
-      const b64 = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve((reader.result as string).split(",")[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const res = await fetch(`${API.fileUpload}/upload`, {
+
+    // Читаем файл целиком как ArrayBuffer
+    const arrayBuffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    const totalChunks = Math.ceil(bytes.length / CHUNK_SIZE);
+
+    // 1. init
+    const initRes = await fetch(`${API.fileUpload}/init`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        file_name: file.name,
+        file_size: file.size,
+        context_key: contextKey,
+      }),
+    });
+    if (!initRes.ok) {
+      const err = await initRes.json().catch(() => ({}));
+      throw new Error(err.error || `init failed: ${initRes.status}`);
+    }
+    const { upload_id } = await initRes.json();
+
+    // 2. chunks
+    for (let i = 0; i < totalChunks; i++) {
+      const slice = bytes.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      // Конвертируем Uint8Array в base64
+      let b64 = "";
+      const chunkArray = Array.from(slice);
+      for (let j = 0; j < chunkArray.length; j += 8192) {
+        b64 += String.fromCharCode(...chunkArray.slice(j, j + 8192));
+      }
+      b64 = btoa(b64);
+
+      const chunkRes = await fetch(`${API.fileUpload}/chunk`, {
         method: "POST",
         headers: authHeaders(),
         body: JSON.stringify({
-          chat_id: activeChat.id,
-          file_name: file.name,
-          file_data: b64,
-          file_size: file.size,
+          upload_id,
+          chunk_index: i,
+          total_chunks: totalChunks,
+          data: b64,
         }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || "Ошибка загрузки файла");
-        return;
+      if (!chunkRes.ok) {
+        const err = await chunkRes.json().catch(() => ({}));
+        throw new Error(err.error || `chunk ${i} failed: ${chunkRes.status}`);
       }
-      const data = await res.json();
-      if (data.message) {
-        setMessages(prev => [...prev, data.message]);
+    }
+
+    // 3. finish
+    const finishRes = await fetch(`${API.fileUpload}/finish`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ upload_id }),
+    });
+    if (!finishRes.ok) {
+      const err = await finishRes.json().catch(() => ({}));
+      throw new Error(err.error || `finish failed: ${finishRes.status}`);
+    }
+    return await finishRes.json();
+  };
+
+  const handleFileUpload = async (file: File) => {
+    if (!activeChat || uploadingFile) return;
+    setUploadingFile(true);
+    try {
+      const result = await uploadFileChunked(file, `chat:${activeChat.id}`);
+      if (result?.message) {
+        setMessages(prev => [...prev, result.message as never]);
         loadChats();
       }
-    } catch {
-      alert("Ошибка соединения при загрузке файла");
+    } catch (e) {
+      alert("Ошибка загрузки файла: " + (e instanceof Error ? e.message : String(e)));
     } finally {
       setUploadingFile(false);
     }
@@ -1549,33 +1596,14 @@ function AppInner() {
 
   const handleUserFileUpload = async (file: File) => {
     if (uploadingUserFile) return;
-    const MAX_MB = 50;
-    if (file.size > MAX_MB * 1024 * 1024) {
-      alert(`Файл слишком большой. Максимум ${MAX_MB} МБ.`);
-      return;
-    }
     setUploadingUserFile(true);
     try {
-      const reader = new FileReader();
-      const b64 = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve((reader.result as string).split(",")[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const res = await fetch(`${API.fileUpload}/store`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({ file_name: file.name, file_data: b64 }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || "Ошибка загрузки");
-        return;
+      const result = await uploadFileChunked(file, "store");
+      if (result?.file) {
+        setUserFiles(prev => [result.file as never, ...prev]);
       }
-      const data = await res.json();
-      if (data.file) setUserFiles(prev => [data.file, ...prev]);
-    } catch {
-      alert("Ошибка соединения");
+    } catch (e) {
+      alert("Ошибка загрузки: " + (e instanceof Error ? e.message : String(e)));
     } finally {
       setUploadingUserFile(false);
     }
@@ -3205,7 +3233,7 @@ function AppInner() {
                             <button onClick={async () => {
                                 await fetch(`${API.admin}?action=unban`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ user_id: adminSelectedUser.id }) });
                                 loadAdminUsers();
-                                setAdminSelectedUser((prev: any) => prev ? { ...prev, is_banned: false } : null);
+                                setAdminSelectedUser((prev) => prev ? { ...prev, is_banned: false } : null);
                               }}
                               className="px-3 py-1.5 text-[10px] rounded flex items-center gap-1"
                               style={{ background: "#22c55e", color: "#fff", fontFamily: FONT.mono, border: "none" }}>
@@ -3216,7 +3244,7 @@ function AppInner() {
                               const newRole = adminSelectedUser.role === "admin" ? "user" : "admin";
                               await fetch(`${API.admin}?action=set_role`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ user_id: adminSelectedUser.id, role: newRole }) });
                               loadAdminUsers();
-                              setAdminSelectedUser((prev: any) => prev ? { ...prev, role: newRole } : null);
+                              setAdminSelectedUser((prev) => prev ? { ...prev, role: newRole } : null);
                             }}
                             className="px-3 py-1.5 text-[10px] rounded flex items-center gap-1"
                             style={{ background: adminSelectedUser.role === "admin" ? "#6b7280" : "#8b5cf6", color: "#fff", fontFamily: FONT.mono, border: "none" }}>
