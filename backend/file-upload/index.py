@@ -1,17 +1,14 @@
 """
-Загрузка файлов в чат через S3 presigned URL.
-POST /presign  — получить presigned URL для прямой загрузки в S3
-POST /confirm  — подтвердить загрузку и сохранить сообщение в БД
+Загрузка файлов в чат через бэкенд (base64 → S3).
+POST /upload  — загрузить файл в чат (base64, до 50 МБ)
+POST /store   — сохранить файл в личное хранилище
 """
-import json
-import os
-import uuid
-import mimetypes
+import json, os, uuid, mimetypes, base64
 import boto3
 import psycopg2
 
 SCHEMA = os.environ.get("MAIN_DB_SCHEMA", "public")
-MAX_SIZE_BYTES = 50 * 1024 * 1024  # 50 МБ
+MAX_SIZE_BYTES = 50 * 1024 * 1024
 
 CORS = {
     "Access-Control-Allow-Origin": "*",
@@ -19,26 +16,22 @@ CORS = {
     "Access-Control-Allow-Headers": "Content-Type, X-Session-Id",
 }
 
-
 def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
 
+def tbl(t):
+    return f"{SCHEMA}.{t}"
 
-def tbl(table):
-    return f"{SCHEMA}.{table}"
-
-
-def get_user_by_session(cur, session_id):
-    if not session_id:
+def get_user(cur, sid):
+    if not sid:
         return None
     cur.execute(
         f"""SELECT u.id, u.display_name, u.avatar_initials
            FROM {tbl('sessions')} s JOIN {tbl('users')} u ON u.id = s.user_id
            WHERE s.token = %s AND s.expires_at > NOW()""",
-        (session_id,)
+        (sid,)
     )
     return cur.fetchone()
-
 
 def get_s3():
     return boto3.client(
@@ -48,123 +41,110 @@ def get_s3():
         aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
     )
 
+def fmt_size(n):
+    if n < 1024: return f"{n} Б"
+    if n < 1048576: return f"{n/1024:.1f} КБ"
+    return f"{n/1048576:.1f} МБ"
 
-def fmt_size(size_bytes: int) -> str:
-    if size_bytes < 1024:
-        return f"{size_bytes} Б"
-    if size_bytes < 1024 * 1024:
-        return f"{size_bytes / 1024:.1f} КБ"
-    return f"{size_bytes / 1024 / 1024:.1f} МБ"
-
+def upload_to_s3(file_bytes, file_name, folder):
+    ext = file_name.rsplit(".", 1)[-1].lower() if "." in file_name else "bin"
+    mime = mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+    key = f"{folder}/{uuid.uuid4().hex}.{ext}"
+    get_s3().put_object(Bucket="files", Key=key, Body=file_bytes, ContentType=mime)
+    cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+    return cdn_url, mime
 
 def handler(event: dict, context) -> dict:
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS, "body": ""}
 
     method = event.get("httpMethod", "GET")
-    path = event.get("path", "/")
-    headers = event.get("headers") or {}
-    session_id = headers.get("x-session-id") or headers.get("X-Session-Id")
+    path   = event.get("path", "/")
+    hdrs   = event.get("headers") or {}
+    sid    = hdrs.get("x-session-id") or hdrs.get("X-Session-Id")
 
     conn = get_conn()
     try:
         cur = conn.cursor()
-        user = get_user_by_session(cur, session_id)
+        user = get_user(cur, sid)
         if not user:
             return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "unauthorized"})}
+        user_id, user_name, user_avatar = user
 
-        user_id, user_name, user_avatar = user[0], user[1], user[2]
-
-        # POST /presign — выдать presigned URL для PUT в S3
-        if method == "POST" and "presign" in path:
+        if method == "POST":
             body = json.loads(event.get("body") or "{}")
-            chat_id = body.get("chat_id")
-            file_name = body.get("file_name", "file")
-            file_size = int(body.get("file_size", 0))
-            file_type = body.get("file_type", "application/octet-stream")
 
-            if not chat_id:
-                return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "chat_id required"})}
+            # POST /upload — файл в чат
+            if "upload" in path:
+                chat_id       = body.get("chat_id")
+                file_name     = body.get("file_name", "file")
+                file_data_b64 = body.get("file_data", "")
 
-            if file_size > MAX_SIZE_BYTES:
-                return {"statusCode": 413, "headers": CORS, "body": json.dumps({"error": "Файл слишком большой. Максимум 50 МБ."})}
+                if not chat_id or not file_data_b64:
+                    return {"statusCode": 400, "headers": CORS,
+                            "body": json.dumps({"error": "chat_id and file_data required"})}
 
-            cur.execute(
-                f"SELECT 1 FROM {tbl('chat_members')} WHERE chat_id = %s AND user_id = %s",
-                (chat_id, user_id)
-            )
-            if not cur.fetchone():
-                return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "forbidden"})}
+                file_bytes = base64.b64decode(file_data_b64)
+                if len(file_bytes) > MAX_SIZE_BYTES:
+                    return {"statusCode": 413, "headers": CORS,
+                            "body": json.dumps({"error": "Файл слишком большой. Максимум 50 МБ."})}
 
-            ext = file_name.rsplit(".", 1)[-1].lower() if "." in file_name else "bin"
-            mime = mimetypes.guess_type(file_name)[0] or file_type or "application/octet-stream"
-            file_key = f"chat_files/{chat_id}/{uuid.uuid4().hex}.{ext}"
+                cur.execute(f"SELECT 1 FROM {tbl('chat_members')} WHERE chat_id=%s AND user_id=%s",
+                            (chat_id, user_id))
+                if not cur.fetchone():
+                    return {"statusCode": 403, "headers": CORS,
+                            "body": json.dumps({"error": "forbidden"})}
 
-            s3 = get_s3()
-            presigned_url = s3.generate_presigned_url(
-                "put_object",
-                Params={
-                    "Bucket": "files",
-                    "Key": file_key,
-                    "ContentType": mime,
-                },
-                ExpiresIn=300,
-            )
-            cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{file_key}"
+                cdn_url, _ = upload_to_s3(file_bytes, file_name, f"chat_files/{chat_id}")
+                size_str    = fmt_size(len(file_bytes))
 
-            return {
-                "statusCode": 200,
-                "headers": CORS,
-                "body": json.dumps({
-                    "upload_url": presigned_url,
-                    "cdn_url": cdn_url,
-                    "file_key": file_key,
-                    "mime": mime,
-                }),
-            }
+                cur.execute(
+                    f"""INSERT INTO {tbl('messages')}
+                           (chat_id, sender_id, text, msg_type, file_name, file_size, file_url)
+                        VALUES (%s,%s,'','file',%s,%s,%s) RETURNING id, created_at""",
+                    (chat_id, user_id, file_name, size_str, cdn_url)
+                )
+                row = cur.fetchone()
+                conn.commit()
+                return {"statusCode": 200, "headers": CORS, "body": json.dumps({"message": {
+                    "id": row[0], "text": "", "type": "file",
+                    "file_name": file_name, "file_size": size_str, "file_url": cdn_url,
+                    "time": row[1].strftime("%H:%M"),
+                    "sender_id": user_id, "sender_name": user_name,
+                    "sender_avatar": user_avatar, "own": True,
+                }})}
 
-        # POST /confirm — записать сообщение о загруженном файле
-        if method == "POST" and "confirm" in path:
-            body = json.loads(event.get("body") or "{}")
-            chat_id = body.get("chat_id")
-            file_name = body.get("file_name", "file")
-            file_size = int(body.get("file_size", 0))
-            cdn_url = body.get("cdn_url")
+            # POST /store — файл в личное хранилище
+            if "store" in path:
+                file_name     = body.get("file_name", "file")
+                file_data_b64 = body.get("file_data", "")
 
-            if not chat_id or not cdn_url:
-                return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "chat_id and cdn_url required"})}
+                if not file_data_b64:
+                    return {"statusCode": 400, "headers": CORS,
+                            "body": json.dumps({"error": "file_data required"})}
 
-            cur.execute(
-                f"SELECT 1 FROM {tbl('chat_members')} WHERE chat_id = %s AND user_id = %s",
-                (chat_id, user_id)
-            )
-            if not cur.fetchone():
-                return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "forbidden"})}
+                file_bytes = base64.b64decode(file_data_b64)
+                if len(file_bytes) > MAX_SIZE_BYTES:
+                    return {"statusCode": 413, "headers": CORS,
+                            "body": json.dumps({"error": "Файл слишком большой. Максимум 50 МБ."})}
 
-            size_str = fmt_size(file_size)
+                cdn_url, mime = upload_to_s3(file_bytes, file_name, f"user_files/{user_id}")
+                size_str      = fmt_size(len(file_bytes))
 
-            cur.execute(
-                f"""INSERT INTO {tbl('messages')} (chat_id, sender_id, text, msg_type, file_name, file_size, file_url)
-                   VALUES (%s, %s, '', 'file', %s, %s, %s) RETURNING id, created_at""",
-                (chat_id, user_id, file_name, size_str, cdn_url)
-            )
-            row = cur.fetchone()
-            conn.commit()
-
-            message = {
-                "id": row[0],
-                "text": "",
-                "type": "file",
-                "file_name": file_name,
-                "file_size": size_str,
-                "file_url": cdn_url,
-                "time": row[1].strftime("%H:%M"),
-                "sender_id": user_id,
-                "sender_name": user_name,
-                "sender_avatar": user_avatar,
-                "own": True,
-            }
-            return {"statusCode": 200, "headers": CORS, "body": json.dumps({"message": message})}
+                cur.execute(
+                    f"""INSERT INTO {tbl('user_files')}
+                           (user_id, file_name, file_size, file_url, mime_type)
+                        VALUES (%s,%s,%s,%s,%s) RETURNING id, created_at""",
+                    (user_id, file_name, size_str, cdn_url, mime)
+                )
+                row = cur.fetchone()
+                conn.commit()
+                return {"statusCode": 200, "headers": CORS, "body": json.dumps({"file": {
+                    "id": row[0], "name": file_name, "size": size_str,
+                    "url": cdn_url, "mime": mime,
+                    "date": row[1].strftime("%d.%m.%Y"),
+                    "sender": user_name,
+                }})}
 
     finally:
         conn.close()

@@ -7,17 +7,17 @@
       "expectedStatus": 200
     },
     {
-      "name": "Presign — unauthorized without session",
+      "name": "Upload — unauthorized",
       "method": "POST",
-      "path": "/presign",
-      "body": {"chat_id": 1, "file_name": "test.jpg", "file_size": 1024, "file_type": "image/jpeg"},
+      "path": "/upload",
+      "body": {"chat_id": 1, "file_name": "test.txt", "file_data": "aGVsbG8="},
       "expectedStatus": 401
     },
     {
-      "name": "Confirm — unauthorized without session",
+      "name": "Store — unauthorized",
       "method": "POST",
-      "path": "/confirm",
-      "body": {"chat_id": 1, "file_name": "test.jpg", "file_size": 1024, "cdn_url": "https://cdn.poehali.dev/test"},
+      "path": "/store",
+      "body": {"file_name": "test.txt", "file_data": "aGVsbG8="},
       "expectedStatus": 401
     }
   ]

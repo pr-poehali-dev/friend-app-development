@@ -87,6 +87,7 @@ const API = {
   calls: "https://functions.poehali.dev/af1c4fda-8213-498e-baac-420159c8fc6e",
   contacts: "https://functions.poehali.dev/5c7f4e46-aec0-4fab-8215-3c55c316f3a3",
   fileUpload: "https://functions.poehali.dev/19819ee8-2dfb-41ae-90b2-13698b6ffa77",
+  userFiles: "https://functions.poehali.dev/69211784-1643-4e44-a39e-dc0a506fcc08",
 };
 
 type Section = "chats" | "contacts" | "calls" | "video" | "files" | "bots" | "settings" | "analytics";
@@ -1208,6 +1209,37 @@ function useIsMobile() {
   return isMobile;
 }
 
+// ============ INCOMING CALL SOUND ============
+function IncomingCallSound() {
+  useEffect(() => {
+    const ctx = new (window.AudioContext || (window as unknown as {webkitAudioContext: typeof AudioContext}).webkitAudioContext)();
+    let stopped = false;
+    let timeout: ReturnType<typeof setTimeout>;
+
+    const ring = () => {
+      if (stopped) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.4);
+      timeout = setTimeout(ring, 1200);
+    };
+    ring();
+    return () => {
+      stopped = true;
+      clearTimeout(timeout);
+      ctx.close();
+    };
+  }, []);
+  return null;
+}
+
 // ============ MAIN APP ============
 function AppInner() {
   useTheme(); // подписка на тему (применяется через CSS body[data-theme])
@@ -1262,6 +1294,14 @@ function AppInner() {
   const [callStatus, setCallStatus] = useState<"calling" | "ringing" | "active" | "error">("calling");
   const [callErrorMsg, setCallErrorMsg] = useState<string>("");
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [userFiles, setUserFiles] = useState<{id:number;name:string;size:string;url:string;mime:string;date:string;sender:string}[]>([]);
+  const [loadingUserFiles, setLoadingUserFiles] = useState(false);
+  const [uploadingUserFile, setUploadingUserFile] = useState(false);
+  const [sendFileModal, setSendFileModal] = useState<{id:number;name:string;url:string} | null>(null);
+  const [sendChatIds, setSendChatIds] = useState<number[]>([]);
+  const [sendEmails, setSendEmails] = useState("");
+  const [sendMessage, setSendMessage] = useState("");
+  const [sendingFile, setSendingFile] = useState(false);
   const [contactSearch, setContactSearch] = useState("");
   const [showAddContact, setShowAddContact] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -1416,47 +1456,28 @@ function AppInner() {
     }
     setUploadingFile(true);
     try {
-      // Шаг 1: получить presigned URL
-      const presignRes = await fetch(`${API.fileUpload}/presign`, {
+      const reader = new FileReader();
+      const b64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve((reader.result as string).split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch(`${API.fileUpload}/upload`, {
         method: "POST",
         headers: authHeaders(),
         body: JSON.stringify({
           chat_id: activeChat.id,
           file_name: file.name,
+          file_data: b64,
           file_size: file.size,
-          file_type: file.type || "application/octet-stream",
         }),
       });
-      if (!presignRes.ok) {
-        const err = await presignRes.json().catch(() => ({}));
-        alert(err.error || "Ошибка получения ссылки для загрузки");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || "Ошибка загрузки файла");
         return;
       }
-      const { upload_url, cdn_url } = await presignRes.json();
-
-      // Шаг 2: загрузить файл напрямую в S3 через PUT
-      const uploadRes = await fetch(upload_url, {
-        method: "PUT",
-        headers: { "Content-Type": file.type || "application/octet-stream" },
-        body: file,
-      });
-      if (!uploadRes.ok) {
-        alert("Ошибка загрузки файла в хранилище");
-        return;
-      }
-
-      // Шаг 3: подтвердить и сохранить сообщение
-      const confirmRes = await fetch(`${API.fileUpload}/confirm`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({
-          chat_id: activeChat.id,
-          file_name: file.name,
-          file_size: file.size,
-          cdn_url,
-        }),
-      });
-      const data = await confirmRes.json();
+      const data = await res.json();
       if (data.message) {
         setMessages(prev => [...prev, data.message]);
         loadChats();
@@ -1465,6 +1486,40 @@ function AppInner() {
       alert("Ошибка соединения при загрузке файла");
     } finally {
       setUploadingFile(false);
+    }
+  };
+
+  const handleUserFileUpload = async (file: File) => {
+    if (uploadingUserFile) return;
+    const MAX_MB = 50;
+    if (file.size > MAX_MB * 1024 * 1024) {
+      alert(`Файл слишком большой. Максимум ${MAX_MB} МБ.`);
+      return;
+    }
+    setUploadingUserFile(true);
+    try {
+      const reader = new FileReader();
+      const b64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve((reader.result as string).split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch(`${API.fileUpload}/store`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ file_name: file.name, file_data: b64 }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || "Ошибка загрузки");
+        return;
+      }
+      const data = await res.json();
+      if (data.file) setUserFiles(prev => [data.file, ...prev]);
+    } catch {
+      alert("Ошибка соединения");
+    } finally {
+      setUploadingUserFile(false);
     }
   };
 
@@ -1483,6 +1538,22 @@ function AppInner() {
 
   useEffect(() => {
     if (section === "calls" && sessionToken) loadCallHistory();
+  }, [section, sessionToken]);
+
+  const loadUserFiles = useCallback(async () => {
+    if (!sessionToken) return;
+    setLoadingUserFiles(true);
+    try {
+      const res = await fetch(API.userFiles, { headers: authHeaders() });
+      const data = await res.json();
+      if (data.files) setUserFiles(data.files);
+    } finally {
+      setLoadingUserFiles(false);
+    }
+  }, [sessionToken]);
+
+  useEffect(() => {
+    if (section === "files" && sessionToken) loadUserFiles();
   }, [section, sessionToken]);
 
   // Проверка входящих звонков каждые 3 секунды
@@ -2427,39 +2498,186 @@ function AppInner() {
         {/* FILES */}
         {section === "files" && (
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="px-6 pt-5 pb-4 border-b flex items-center justify-between flex-shrink-0" style={{ borderColor: "var(--t-border)", background: "linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))" }}>
+            {/* Header */}
+            <div className="px-6 pt-5 pb-4 border-b flex items-center justify-between flex-shrink-0"
+              style={{ borderColor: "var(--t-border)", background: "linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))" }}>
               <div>
                 <h2 style={{ ...heading3d(13), letterSpacing: "0.12em" }}>{t("files_title")}</h2>
-                <p className="text-xs mt-0.5" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{t("files_sub")}</p>
+                <p className="text-xs mt-0.5" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>
+                  {userFiles.length} {t("files_sub")} · хранение без ограничений
+                </p>
               </div>
-              <button className="btn-3d px-3 py-1.5 text-xs flex items-center gap-1.5" style={{ ...btn3d("var(--t-accent)") }}>
-                <Icon name="Upload" size={12} /> {t("files_upload")}
-              </button>
+              <label className={`btn-3d px-3 py-1.5 text-xs flex items-center gap-1.5 cursor-pointer ${uploadingUserFile ? "opacity-50 pointer-events-none" : ""}`}
+                style={{ ...btn3d("var(--t-accent)") }}>
+                {uploadingUserFile
+                  ? <><div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: "#fff", borderTopColor: "transparent" }} /> Загружаем...</>
+                  : <><Icon name="Upload" size={12} /> {t("files_upload")}</>
+                }
+                <input type="file" className="hidden" accept="*/*" disabled={uploadingUserFile}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleUserFileUpload(f); e.target.value = ""; }} />
+              </label>
             </div>
+
+            {/* Table */}
             <div className="flex-1 overflow-y-auto px-6 py-4">
-              <div className="overflow-hidden" style={{ ...card3d() }}>
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b" style={{ borderColor: "var(--t-border)", background: "linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))" }}>
-                      {[t("files_name"), t("files_size"), t("files_sender"), t("files_date"), ""].map((h, i) => (
-                        <th key={h} className="text-left px-4 py-2.5 text-[10px] tracking-widest uppercase" style={{ ...heading3d(10), letterSpacing: "0.12em" }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {STATIC_FILES.map((f, index) => (
-                      <tr key={f.id} className="transition-colors" style={{ borderBottom: "1px solid var(--t-bg-panel)" }}>
-                        <td className="px-4 py-3"><div className="flex items-center gap-2.5"><FileIconComp type={f.type} /><span className="text-xs font-medium" style={{ fontFamily: FONT.heading, fontWeight: 700, color: "var(--t-text)" }}>{f.name}</span></div></td>
-                        <td className="px-4 py-3 text-xs font-mono" style={{ fontFamily: FONT.mono, color: "var(--t-text-dim)" }}>{f.size}</td>
-                        <td className="px-4 py-3 text-xs" style={{ fontFamily: FONT.body, color: "var(--t-text-muted)" }}>{f.sender}</td>
-                        <td className="px-4 py-3 text-xs" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{f.date}</td>
-                        <td className="px-4 py-3"><button className="transition-colors"><Icon name="Download" size={14} style={liveIcon(index * 0.2)} /></button></td>
+              {loadingUserFiles && userFiles.length === 0 ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--t-accent)", borderTopColor: "transparent" }} />
+                </div>
+              ) : userFiles.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3">
+                  <div style={{ ...card3d(), padding: 16, display: "inline-flex" }}>
+                    <Icon name="FolderOpen" size={28} style={liveIcon(0)} />
+                  </div>
+                  <span style={{ ...heading3d(11), letterSpacing: "0.1em" }}>{t("files_empty")}</span>
+                  <span style={{ fontFamily: FONT.body, fontSize: 12, color: "var(--t-text-dim)" }}>
+                    Нажмите «Загрузить» чтобы добавить первый файл
+                  </span>
+                </div>
+              ) : (
+                <div className="overflow-hidden" style={{ ...card3d() }}>
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b" style={{ borderColor: "var(--t-border)", background: "linear-gradient(180deg, color-mix(in srgb, var(--t-accent) 5%, var(--t-bg-main)), var(--t-bg-main))" }}>
+                        {[t("files_name"), t("files_size"), t("files_date"), ""].map((h) => (
+                          <th key={h} className="text-left px-4 py-2.5" style={{ ...heading3d(10), letterSpacing: "0.12em" }}>{h}</th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {userFiles.map((f, idx) => (
+                        <tr key={f.id} style={{ borderBottom: "1px solid var(--t-bg-panel)" }}>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2.5">
+                              <div style={{ width: 28, height: 28, borderRadius: 6, background: "color-mix(in srgb, var(--t-accent) 15%, transparent)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                <Icon name={/image/.test(f.mime) ? "Image" : /video/.test(f.mime) ? "Video" : /audio/.test(f.mime) ? "Music" : /pdf/.test(f.mime) ? "FileText" : /zip|rar|7z/.test(f.mime) ? "Archive" : "File"} size={14} style={liveIcon(idx * 0.1)} />
+                              </div>
+                              <span className="text-xs font-medium truncate max-w-[200px]" style={{ fontFamily: FONT.heading, color: "var(--t-text)" }}>{f.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-xs font-mono" style={{ fontFamily: FONT.mono, color: "var(--t-text-dim)" }}>{f.size}</td>
+                          <td className="px-4 py-3 text-xs" style={{ fontFamily: FONT.body, color: "var(--t-text-dim)" }}>{f.date}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1">
+                              <a href={f.url} download={f.name} target="_blank" rel="noopener noreferrer"
+                                title="Скачать"
+                                className="p-1.5 rounded transition-colors hover:bg-white/10">
+                                <Icon name="Download" size={14} style={liveIcon(idx * 0.1)} />
+                              </a>
+                              <button
+                                title="Разослать"
+                                onClick={() => { setSendFileModal({id: f.id, name: f.name, url: f.url}); setSendChatIds([]); setSendEmails(""); setSendMessage(""); }}
+                                className="p-1.5 rounded transition-colors hover:bg-white/10">
+                                <Icon name="Send" size={14} style={liveIcon(idx * 0.1)} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
+
+            {/* Send Modal */}
+            {sendFileModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }}>
+                <div className="w-full max-w-md mx-4 rounded-lg overflow-hidden" style={{ ...card3d(), background: "var(--t-bg-panel)" }}>
+                  <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "var(--t-border)" }}>
+                    <span style={{ ...heading3d(12), letterSpacing: "0.1em" }}>РАЗОСЛАТЬ ФАЙЛ</span>
+                    <button onClick={() => setSendFileModal(null)} style={{ color: "var(--t-text-dim)" }}>
+                      <Icon name="X" size={16} />
+                    </button>
+                  </div>
+                  <div className="px-5 py-4 flex flex-col gap-4">
+                    <div style={{ fontFamily: FONT.body, fontSize: 12, color: "var(--t-text-dim)" }}>
+                      📎 {sendFileModal.name}
+                    </div>
+
+                    {/* Чаты */}
+                    <div>
+                      <div className="text-xs mb-2" style={{ ...heading3d(10), letterSpacing: "0.1em" }}>В ЧАТЫ (выберите один или несколько)</div>
+                      <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
+                        {chats.map(ch => (
+                          <label key={ch.id} className="flex items-center gap-2 cursor-pointer py-1 px-2 rounded hover:bg-white/5">
+                            <input type="checkbox" checked={sendChatIds.includes(ch.id)}
+                              onChange={e => setSendChatIds(prev => e.target.checked ? [...prev, ch.id] : prev.filter(x => x !== ch.id))}
+                              className="accent-[var(--t-accent)]" />
+                            <span style={{ fontFamily: FONT.body, fontSize: 12, color: "var(--t-text)" }}>{ch.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Email */}
+                    <div>
+                      <div className="text-xs mb-1" style={{ ...heading3d(10), letterSpacing: "0.1em" }}>НА EMAIL (через запятую)</div>
+                      <input value={sendEmails} onChange={e => setSendEmails(e.target.value)}
+                        placeholder="ivan@example.com, anna@example.com"
+                        className="w-full bg-transparent focus:outline-none text-sm px-3 py-2 rounded"
+                        style={{ border: "1px solid var(--t-border)", color: "var(--t-text)", fontFamily: FONT.body, fontSize: 12 }} />
+                    </div>
+
+                    {/* Сообщение */}
+                    <div>
+                      <div className="text-xs mb-1" style={{ ...heading3d(10), letterSpacing: "0.1em" }}>СОПРОВОДИТЕЛЬНОЕ СООБЩЕНИЕ</div>
+                      <textarea value={sendMessage} onChange={e => setSendMessage(e.target.value)}
+                        placeholder="Необязательно..."
+                        rows={2}
+                        className="w-full bg-transparent focus:outline-none text-sm px-3 py-2 rounded resize-none"
+                        style={{ border: "1px solid var(--t-border)", color: "var(--t-text)", fontFamily: FONT.body, fontSize: 12 }} />
+                    </div>
+                  </div>
+                  <div className="px-5 py-4 border-t flex gap-2 justify-end" style={{ borderColor: "var(--t-border)" }}>
+                    <button onClick={() => setSendFileModal(null)}
+                      className="px-4 py-2 text-xs rounded"
+                      style={{ fontFamily: FONT.mono, color: "var(--t-text-dim)", border: "1px solid var(--t-border)" }}>
+                      ОТМЕНА
+                    </button>
+                    <button
+                      disabled={sendingFile || (sendChatIds.length === 0 && !sendEmails.trim())}
+                      onClick={async () => {
+                        if (!sendFileModal) return;
+                        setSendingFile(true);
+                        try {
+                          let chatSent = 0, mailSent = 0;
+                          if (sendChatIds.length > 0) {
+                            const r = await fetch(`${API.userFiles}/send-chat`, {
+                              method: "POST", headers: authHeaders(),
+                              body: JSON.stringify({ file_id: sendFileModal.id, chat_ids: sendChatIds }),
+                            });
+                            const d = await r.json();
+                            chatSent = d.sent || 0;
+                          }
+                          if (sendEmails.trim()) {
+                            const emails = sendEmails.split(",").map(e => e.trim()).filter(Boolean);
+                            const r = await fetch(`${API.userFiles}/send-mail`, {
+                              method: "POST", headers: authHeaders(),
+                              body: JSON.stringify({ file_id: sendFileModal.id, emails, message: sendMessage }),
+                            });
+                            const d = await r.json();
+                            mailSent = d.sent || 0;
+                          }
+                          alert(`Отправлено: ${chatSent} чат(ов), ${mailSent} email(ов)`);
+                          setSendFileModal(null);
+                        } catch {
+                          alert("Ошибка отправки");
+                        } finally {
+                          setSendingFile(false);
+                        }
+                      }}
+                      className="btn-3d px-4 py-2 text-xs flex items-center gap-1.5 disabled:opacity-50"
+                      style={{ ...btn3d("var(--t-accent)") }}>
+                      {sendingFile
+                        ? <><div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: "#fff", borderTopColor: "transparent" }} /> Отправляем...</>
+                        : <><Icon name="Send" size={12} /> РАЗОСЛАТЬ</>
+                      }
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -2562,29 +2780,110 @@ function AppInner() {
 
       {/* Incoming Call */}
       {incomingCall && !activeCall && (
-        <div className="fixed bottom-6 right-6 bg-[#0a1120] border border-[#22c55e] rounded-sm p-4 w-72 shadow-2xl z-50" style={{ animation: "fadeSlideIn 0.3s ease" }}>
-          <div className="flex items-center gap-3 mb-4">
-            <AvatarBadge initials={incomingCall.caller_avatar} />
-            <div>
-              <div className="text-sm font-medium text-[#e2e8f0]">{incomingCall.caller_name}</div>
-              <div className="text-xs text-[#22c55e] flex items-center gap-1">
-                <Icon name={incomingCall.call_type === "video" ? "Video" : "Phone"} size={11} />
-                Входящий {incomingCall.call_type === "video" ? "видео" : "аудио"}звонок
+        <>
+          {/* Звук звонка через Web Audio API */}
+          <IncomingCallSound />
+          <div
+            className="fixed z-[9998]"
+            style={{
+              bottom: 24, right: 24,
+              width: 320,
+              borderRadius: 16,
+              overflow: "hidden",
+              background: "linear-gradient(135deg, #0a1628 0%, #0f1f3d 100%)",
+              border: "1px solid rgba(34,197,94,0.4)",
+              boxShadow: "0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(34,197,94,0.2)",
+              animation: "incomingCallSlide 0.4s cubic-bezier(0.34,1.56,0.64,1) both",
+            }}
+          >
+            {/* Зелёная пульсирующая полоска сверху */}
+            <div style={{
+              height: 3,
+              background: "linear-gradient(90deg, #22c55e, #16a34a, #22c55e)",
+              backgroundSize: "200% 100%",
+              animation: "shimmer 1.5s linear infinite",
+            }} />
+
+            <div className="p-4">
+              {/* Аватар + имя */}
+              <div className="flex items-center gap-3 mb-4">
+                <div style={{
+                  width: 48, height: 48, borderRadius: "50%",
+                  background: "linear-gradient(135deg, #22c55e, #15803d)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 18, fontWeight: 700, color: "#fff",
+                  fontFamily: "monospace",
+                  flexShrink: 0,
+                  animation: "callRing 1s ease-in-out infinite",
+                  boxShadow: "0 0 0 4px rgba(34,197,94,0.2), 0 0 0 8px rgba(34,197,94,0.1)",
+                }}>
+                  {incomingCall.caller_avatar}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#e2e8f0", fontFamily: "monospace", letterSpacing: "0.03em" }}>
+                    {incomingCall.caller_name}
+                  </div>
+                  <div style={{ fontSize: 12, color: "#22c55e", display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+                    <Icon name={incomingCall.call_type === "video" ? "Video" : "Phone"} size={11} />
+                    Входящий {incomingCall.call_type === "video" ? "видеозвонок" : "аудиозвонок"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Кнопки */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => answerCall(incomingCall)}
+                  style={{
+                    flex: 1, padding: "10px 0",
+                    background: "linear-gradient(135deg, #22c55e, #16a34a)",
+                    border: "none", borderRadius: 10,
+                    color: "#fff", fontSize: 12, fontWeight: 700,
+                    fontFamily: "monospace", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                    boxShadow: "0 4px 12px rgba(34,197,94,0.3)",
+                  }}
+                >
+                  <Icon name="Phone" size={14} /> Принять
+                </button>
+                <button
+                  onClick={async () => {
+                    await fetch(`${API.calls}/answer`, {
+                      method: "POST", headers: authHeaders(),
+                      body: JSON.stringify({ call_id: incomingCall.id, accepted: false }),
+                    });
+                    setIncomingCall(null);
+                  }}
+                  style={{
+                    flex: 1, padding: "10px 0",
+                    background: "linear-gradient(135deg, #ef4444, #dc2626)",
+                    border: "none", borderRadius: 10,
+                    color: "#fff", fontSize: 12, fontWeight: 700,
+                    fontFamily: "monospace", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                    boxShadow: "0 4px 12px rgba(239,68,68,0.3)",
+                  }}
+                >
+                  <Icon name="PhoneOff" size={14} /> Отклонить
+                </button>
               </div>
             </div>
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => answerCall(incomingCall)} className="flex-1 py-2 bg-[#22c55e] text-[#080f1a] text-xs font-medium rounded-sm flex items-center justify-center gap-1.5">
-              <Icon name="Phone" size={13} /> Принять
-            </button>
-            <button onClick={async () => {
-              await fetch(`${API.calls}/answer`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ call_id: incomingCall.id, accepted: false }) });
-              setIncomingCall(null);
-            }} className="flex-1 py-2 bg-[#f87171] text-white text-xs font-medium rounded-sm flex items-center justify-center gap-1.5">
-              <Icon name="PhoneOff" size={13} /> Отклонить
-            </button>
-          </div>
-        </div>
+          <style>{`
+            @keyframes incomingCallSlide {
+              from { transform: translateX(120%); opacity: 0; }
+              to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes callRing {
+              0%, 100% { box-shadow: 0 0 0 4px rgba(34,197,94,0.2), 0 0 0 8px rgba(34,197,94,0.1); }
+              50% { box-shadow: 0 0 0 8px rgba(34,197,94,0.25), 0 0 0 16px rgba(34,197,94,0.08); }
+            }
+            @keyframes shimmer {
+              0% { background-position: 200% 0; }
+              100% { background-position: -200% 0; }
+            }
+          `}</style>
+        </>
       )}
 
       {activeCall && (
