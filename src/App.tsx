@@ -1605,6 +1605,9 @@ function AppInner() {
     );
   }
 
+  // Код инвайта — из URL или из sessionStorage (после логина)
+  const pendingInvite = inviteCode || sessionStorage.getItem("pending_invite");
+
   if (!currentUser) {
     if (inviteCode) {
       return (
@@ -1613,20 +1616,28 @@ function AppInner() {
           apiUrl={API.contacts}
           sessionId={null}
           onJoined={() => { window.history.replaceState({}, "", "/"); }}
-          onLogin={() => { window.history.replaceState({}, "", "/"); }}
+          onLogin={() => {
+            sessionStorage.setItem("pending_invite", inviteCode);
+            window.history.replaceState({}, "", "/");
+          }}
         />
       );
     }
     return <LoginScreen onLogin={handleLogin} />;
   }
 
-  if (inviteCode) {
+  if (pendingInvite) {
     return (
       <JoinPage
-        code={inviteCode}
+        code={pendingInvite}
         apiUrl={API.contacts}
         sessionId={sessionToken}
-        onJoined={() => { loadExternalContacts(); window.history.replaceState({}, "", "/"); setSection("contacts"); }}
+        onJoined={() => {
+          sessionStorage.removeItem("pending_invite");
+          window.history.replaceState({}, "", "/");
+          loadExternalContacts();
+          setSection("contacts");
+        }}
         onLogin={() => {}}
       />
     );
