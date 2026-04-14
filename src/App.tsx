@@ -1652,7 +1652,7 @@ function AppInner() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden transition-colors duration-300 relative" style={{ fontFamily: FONT.body, background: T.bgDeep, color: T.text }}>
-      <NotificationToast notifications={notifications} onDismiss={dismissNotifications} />
+      <NotificationToast notifications={notifications} onDismiss={dismissNotifications} onGoToContacts={() => setSection("contacts")} />
 
       {/* ── Звёзды фона (только для тёмных тем) ── */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden app-star" style={{ zIndex: 0 }}>

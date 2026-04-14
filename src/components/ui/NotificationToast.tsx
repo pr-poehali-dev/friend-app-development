@@ -18,9 +18,10 @@ interface ToastItem extends AppNotification {
 interface Props {
   notifications: AppNotification[];
   onDismiss: (ids: number[]) => void;
+  onGoToContacts?: () => void;
 }
 
-export default function NotificationToast({ notifications, onDismiss }: Props) {
+export default function NotificationToast({ notifications, onDismiss, onGoToContacts }: Props) {
   const [items, setItems] = useState<ToastItem[]>([]);
 
   useEffect(() => {
@@ -92,16 +93,28 @@ export default function NotificationToast({ notifications, onDismiss }: Props) {
             transform: item.visible ? "translateX(0) scale(1)" : "translateX(40px) scale(0.95)",
           }}
         >
-          {/* Иконка */}
-          <div style={{
-            width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-            background: "color-mix(in srgb, var(--t-accent) 18%, var(--t-bg-panel))",
-            border: "1px solid color-mix(in srgb, var(--t-accent) 30%, var(--t-border))",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 0 12px color-mix(in srgb, var(--t-accent) 25%, transparent)",
-          }}>
-            <Icon name={iconMap[item.type] || "Bell"} size={18} style={{ color: "var(--t-accent)" }} />
-          </div>
+          {/* Иконка / аватар */}
+          {item.type === "invite_join" && item.data?.avatar_initials ? (
+            <div style={{
+              width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+              background: "var(--t-accent)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontFamily: FONT.heading, fontWeight: 700, fontSize: 13, color: "#fff",
+              boxShadow: "0 0 12px color-mix(in srgb, var(--t-accent) 40%, transparent)",
+            }}>
+              {String(item.data.avatar_initials)}
+            </div>
+          ) : (
+            <div style={{
+              width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+              background: "color-mix(in srgb, var(--t-accent) 18%, var(--t-bg-panel))",
+              border: "1px solid color-mix(in srgb, var(--t-accent) 30%, var(--t-border))",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 0 12px color-mix(in srgb, var(--t-accent) 25%, transparent)",
+            }}>
+              <Icon name={iconMap[item.type] || "Bell"} size={18} style={{ color: "var(--t-accent)" }} />
+            </div>
+          )}
 
           {/* Текст */}
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -125,6 +138,20 @@ export default function NotificationToast({ notifications, onDismiss }: Props) {
             }}>
               {new Date(item.created_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
             </p>
+            {item.type === "invite_join" && onGoToContacts && (
+              <button
+                onClick={() => { onGoToContacts(); dismiss(item.id); }}
+                style={{
+                  marginTop: 8, padding: "4px 10px", borderRadius: 6, fontSize: 10,
+                  fontFamily: FONT.heading, fontWeight: 700, letterSpacing: "0.06em",
+                  background: "color-mix(in srgb, var(--t-accent) 20%, var(--t-bg-panel))",
+                  border: "1px solid color-mix(in srgb, var(--t-accent) 40%, var(--t-border))",
+                  color: "var(--t-accent)", cursor: "pointer",
+                }}
+              >
+                ПЕРЕЙТИ В КОНТАКТЫ
+              </button>
+            )}
           </div>
 
           {/* Закрыть */}
