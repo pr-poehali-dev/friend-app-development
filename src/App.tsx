@@ -1581,23 +1581,11 @@ function AppInner() {
     };
 
     // 1. init
-    console.log("[upload] init start, token:", sessionToken ? "ok" : "EMPTY");
-    let initRes: Response;
-    try {
-      initRes = await fetch(`${API.fileUpload}/init`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({
-          file_name: file.name,
-          file_size: file.size,
-          context_key: contextKey,
-        }),
-      });
-    } catch (fetchErr) {
-      console.error("[upload] init fetch threw:", fetchErr);
-      throw fetchErr;
-    }
-    console.log("[upload] init status:", initRes.status);
+    const initRes = await fetch(`${API.fileUpload}?action=init`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ file_name: file.name, file_size: file.size, context_key: contextKey }),
+    });
     if (!initRes.ok) {
       const err = await initRes.json().catch(() => ({}));
       throw new Error(err.error || `init failed: ${initRes.status}`);
@@ -1612,7 +1600,7 @@ function AppInner() {
 
       let lastErr: Error | null = null;
       for (let attempt = 0; attempt < 3; attempt++) {
-        const chunkRes = await fetch(`${API.fileUpload}/chunk`, {
+        const chunkRes = await fetch(`${API.fileUpload}?action=chunk`, {
           method: "POST",
           headers: authHeaders(),
           body: JSON.stringify({
@@ -1633,7 +1621,7 @@ function AppInner() {
     }
 
     // 3. finish
-    const finishRes = await fetch(`${API.fileUpload}/finish`, {
+    const finishRes = await fetch(`${API.fileUpload}?action=finish`, {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({ upload_id }),

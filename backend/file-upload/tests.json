@@ -9,7 +9,7 @@
     {
       "name": "Init upload — unauthorized",
       "method": "POST",
-      "path": "/",
+      "path": "/?action=init",
       "body": {"file_name": "test.txt", "file_size": 100, "context_key": "store"},
       "expectedStatus": 401
     }

@@ -63,6 +63,15 @@ def handler(event: dict, context) -> dict:
 
     method = event.get("httpMethod", "GET")
     path   = event.get("path", "/")
+    qs     = event.get("queryStringParameters") or {}
+    action = qs.get("action", "")
+    # поддержка и ?action=init и /init (оба варианта)
+    if not action:
+        if "init" in path:   action = "init"
+        elif "chunk" in path: action = "chunk"
+        elif "finish" in path: action = "finish"
+        elif "upload" in path: action = "upload"
+        elif "store" in path:  action = "store"
     hdrs   = event.get("headers") or {}
     sid    = hdrs.get("x-session-id") or hdrs.get("X-Session-Id")
 
@@ -83,8 +92,8 @@ def handler(event: dict, context) -> dict:
             raw_body = base64.b64decode(raw_body).decode("utf-8")
         body = json.loads(raw_body)
 
-        # ── /init — начать чанковую загрузку ──────────────────────
-        if "init" in path:
+        # ── init — начать чанковую загрузку ──────────────────────
+        if action == "init":
             file_name   = body.get("file_name", "file")
             file_size   = int(body.get("file_size", 0))
             context_key = body.get("context_key", "")  # "chat:{id}" или "store"
@@ -101,8 +110,8 @@ def handler(event: dict, context) -> dict:
             return {"statusCode": 200, "headers": CORS,
                     "body": json.dumps({"upload_id": upload_id})}
 
-        # ── /chunk — принять чанк ─────────────────────────────────
-        if "chunk" in path:
+        # ── chunk — принять чанк ─────────────────────────────────
+        if action == "chunk":
             upload_id   = body.get("upload_id")
             chunk_index = int(body.get("chunk_index", 0))
             total_chunks= int(body.get("total_chunks", 1))
@@ -138,8 +147,8 @@ def handler(event: dict, context) -> dict:
             return {"statusCode": 200, "headers": CORS,
                     "body": json.dumps({"ok": True, "chunk": chunk_index})}
 
-        # ── /finish — собрать чанки и сохранить ───────────────────
-        if "finish" in path:
+        # ── finish — собрать чанки и сохранить ───────────────────
+        if action == "finish":
             upload_id = body.get("upload_id")
             if not upload_id:
                 return {"statusCode": 400, "headers": CORS,
@@ -207,8 +216,8 @@ def handler(event: dict, context) -> dict:
                     "sender": user_name,
                 }})}
 
-        # ── /upload — быстрая загрузка файла в чат (до 500КБ) ─────
-        if "upload" in path:
+        # ── upload — быстрая загрузка файла в чат (до 500КБ) ─────
+        if action == "upload":
             chat_id       = body.get("chat_id")
             file_name     = body.get("file_name", "file")
             file_data_b64 = body.get("file_data", "")
@@ -242,8 +251,8 @@ def handler(event: dict, context) -> dict:
                 "sender_avatar": user_avatar, "own": True,
             }})}
 
-        # ── /store — быстрая загрузка файла в хранилище (до 500КБ) ─
-        if "store" in path:
+        # ── store — быстрая загрузка файла в хранилище (до 500КБ) ─
+        if action == "store":
             file_name     = body.get("file_name", "file")
             file_data_b64 = body.get("file_data", "")
 
