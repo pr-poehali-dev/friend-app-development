@@ -324,15 +324,28 @@ body[data-theme="light"] [style*="badgePulse"] {
 
 /* btn-3d в светлой теме */
 body[data-theme="light"] .btn-3d {
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--t-accent) 80%, white) 0%,
+    var(--t-accent) 50%,
+    color-mix(in srgb, var(--t-accent) 70%, black) 100%
+  ) !important;
   box-shadow:
     0 3px 0 color-mix(in srgb, var(--t-accent) 70%, #000),
-    0 4px 10px rgba(0, 122, 99, 0.25) !important;
+    0 4px 10px rgba(0, 122, 99, 0.35) !important;
   color: #ffffff !important;
+  opacity: 1 !important;
 }
 body[data-theme="light"] .btn-3d:hover {
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--t-accent) 90%, white) 0%,
+    var(--t-accent) 50%,
+    color-mix(in srgb, var(--t-accent) 65%, black) 100%
+  ) !important;
   box-shadow:
     0 5px 0 color-mix(in srgb, var(--t-accent) 70%, #000),
-    0 6px 16px rgba(0, 122, 99, 0.35) !important;
+    0 6px 16px rgba(0, 122, 99, 0.45) !important;
   transform: perspective(200px) rotateX(4deg) translateY(-2px) !important;
 }
 

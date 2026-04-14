@@ -24,10 +24,10 @@ export const card3d = (accent = "var(--t-accent)", opacity = 0.18): React.CSSPro
 // Кнопка 3D выпуклая — текст всегда белый, хорошо читается
 export const btn3d = (color = "var(--t-accent)"): React.CSSProperties => ({
   background: `linear-gradient(160deg,
-    color-mix(in srgb, ${color} 115%, white) 0%,
+    color-mix(in srgb, ${color} 85%, white) 0%,
     ${color} 50%,
-    color-mix(in srgb, ${color} 75%, black) 100%)`,
-  border: "none",
+    color-mix(in srgb, ${color} 70%, black) 100%)`,
+  border: `1px solid color-mix(in srgb, ${color} 60%, black)`,
   borderRadius: 10,
   color: "#ffffff",
   fontFamily: FONT.heading,
@@ -35,15 +35,14 @@ export const btn3d = (color = "var(--t-accent)"): React.CSSProperties => ({
   letterSpacing: "0.06em",
   cursor: "pointer",
   boxShadow: `
-    0 0 0 1px color-mix(in srgb, ${color} 40%, transparent),
-    0 0 16px color-mix(in srgb, ${color} 55%, transparent),
-    0 4px 0 color-mix(in srgb, ${color} 55%, black),
-    0 6px 14px color-mix(in srgb, ${color} 35%, transparent),
-    inset 0 1px 0 rgba(255,255,255,0.3)
+    0 0 0 1px color-mix(in srgb, ${color} 50%, transparent),
+    0 4px 0 color-mix(in srgb, ${color} 60%, black),
+    0 6px 14px color-mix(in srgb, ${color} 40%, transparent),
+    inset 0 1px 0 rgba(255,255,255,0.25)
   `,
   transition: "all 0.15s ease",
   position: "relative" as const,
-  textShadow: "0 1px 2px rgba(0,0,0,0.4)",
+  textShadow: "0 1px 2px rgba(0,0,0,0.5)",
 });
 
 // Текст заголовок — чёткий, без размытия
